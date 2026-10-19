@@ -1,0 +1,68 @@
+# Mestre FICTÍCIO para testes. Nunca use dados reais aqui.
+contact:
+  full_name: Ana Teste Silva
+  email: ana@example.com
+  phone: "+55 (11) 90000-0000"
+  location: São Paulo, SP, Brazil
+  remote: Open to Remote
+  linkedin: linkedin.com/in/ana-teste
+  github: github.com/ana-teste
+headlines:
+  data_engineer: "Data Engineer | Python, Spark, Kafka, PostgreSQL"
+  software_engineer: "Software Engineer | Python, FastAPI, React"
+  ai_engineer: "AI Engineer | LLM, RAG, Python"
+summaries:
+  data_engineer_en: "Data Engineer with **4+ years** building pipelines that process **2 TB per day** at Acme."
+skills:
+  languages: [Python, "SQL (T-SQL)", TypeScript]
+  data_engineering: [ETL/ELT, "Apache Spark (PySpark)", Kafka, Airflow]
+  databases: [PostgreSQL, MongoDB]
+  backend_and_web: [FastAPI, React]
+  devops_and_cloud: [Docker, "Microsoft Azure"]
+  ml_and_llm: ["RAG (Retrieval-Augmented Generation)", Claude API]
+skill_aliases:
+  PostgreSQL: [Postgres]
+  "Apache Spark (PySpark)": [Spark, PySpark]
+experience:
+  - id: acme
+    title: Data Engineer
+    title_alternatives: [Software Engineer]
+    organization: Acme Corp
+    location: São Paulo, SP, Brazil
+    start: 2023-03
+    end: null
+    bullets_en:
+      - "Built **12 ETL pipelines** in Python and Spark processing **2 TB per day** with Kafka ingestion."
+      - "Reduced job latency from **10 minutes to 2 minutes** (5x faster)."
+    bullets_pt:
+      - "Construiu **12 pipelines ETL** em Python e Spark processando **2 TB por dia** com ingestão via Kafka."
+      - "Reduziu a latência dos jobs de **10 para 2 minutos** (5x mais rápido)."
+    skills: [Python, "Apache Spark (PySpark)", Kafka, PostgreSQL]
+  - id: beta
+    title: Junior Developer
+    organization: Beta Startup
+    location: Campinas, SP, Brazil
+    start: 2021
+    end: 2023
+    bullets_en:
+      - "Developed FastAPI services and React dashboards used by **300 customers**."
+    skills: [Python, FastAPI, React, TypeScript]
+projects:
+  - id: pipeline-lab
+    name: pipeline-lab
+    url: github.com/ana-teste
+    description_en: "Airflow + PostgreSQL data platform with **data quality checks**."
+    skills: [Airflow, PostgreSQL]
+education:
+  - degree: B.Sc. in Computer Science
+    institution: Universidade Teste
+    start: 2019-02
+    end: 2023-12
+    status: completed
+certifications:
+  - name: "Microsoft Certified: Azure Fundamentals (AZ-900)"
+languages:
+  - name: Portuguese
+    level: Native
+  - name: English
+    level: Advanced

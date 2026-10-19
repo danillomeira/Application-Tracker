@@ -1,0 +1,9 @@
+{
+  "name": "Application Tracker",
+  "short_name": "Tracker",
+  "start_url": "/hoje",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d4ed8",
+  "icons": [{ "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" }]
+}

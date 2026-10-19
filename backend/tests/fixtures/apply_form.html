@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Senior Data Engineer - Globex Careers</title></head>
+<body>
+<h1>Senior Data Engineer</h1>
+<h2>About the role</h2><p>Globex is hiring a data engineer to build pipelines.</p>
+<h2>Responsibilities</h2><ul><li>Build ETL pipelines</li></ul>
+<h2>Requirements</h2><ul><li>Python, Spark, Kafka</li></ul>
+<form id="apply">
+  <label for="first">First name</label><input id="first" name="first_name" required>
+  <label for="last">Last name</label><input id="last" name="last_name" required>
+  <label for="email">Email</label><input id="email" type="email" name="email" required>
+  <label for="phone">Phone</label><input id="phone" type="tel" name="phone">
+  <label for="li">LinkedIn profile</label><input id="li" name="linkedin">
+  <label for="cv">Resume/CV</label><input id="cv" type="file" name="resume">
+  <label for="years">How many years of experience do you have with Python?</label><input id="years" type="number" name="years">
+  <fieldset><legend>Will you now or in the future require visa sponsorship?</legend>
+    <input type="radio" name="spons" id="s-y" value="Yes"><label for="s-y">Yes</label>
+    <input type="radio" name="spons" id="s-n" value="No"><label for="s-n">No</label>
+  </fieldset>
+  <button type="submit">Submit application</button>
+</form>
+<script>
+  document.getElementById('apply').onsubmit = (e) => {
+    e.preventDefault();
+    window.sent = { first: first.value, last: last.value, email: email.value, phone: phone.value, li: li.value,
+      cv: cv.files[0] ? cv.files[0].name : null, years: years.value, spons: (document.querySelector('input[name=spons]:checked') || {}).value };
+    document.body.innerHTML = '<h1>Thank you for applying!</h1><p>We have received your application.</p>';
+  };
+</script>
+</body></html>

@@ -1,0 +1,65 @@
+((# resume.tex.j2: template Jinja2 do estilo classic, renderizado pelo módulo resumes.
+   Delimitadores seguros para LaTeX: ver docs/11-curriculos.md, seção 3.
+   Todo texto passa pelo filtro tex (escape); negrito em markdown vira textbf via md_bold.
+   Parênteses literais ao lado de variáveis ficam entre chaves. #))
+\documentclass[10pt]{article}
+\usepackage{classic}
+
+\begin{document}
+
+\resumeheader{((( contact.full_name|tex )))}
+  {((( headline|tex )))}
+  {((( contact.email|tex ))) \sep ((( contact.phone|tex ))) \sep ((( contact.location|tex )))((* if contact.remote *)) {(}((( contact.remote|tex ))){)}((* endif *))}
+  {((* if contact.linkedin *))\href{https://((( contact.linkedin )))}{((( contact.linkedin|tex )))}((* endif *))((* if contact.github *)) \sep \href{https://((( contact.github )))}{((( contact.github|tex )))}((* endif *))((* if contact.portfolio *)) \sep \href{https://((( contact.portfolio )))}{((( contact.portfolio|tex )))}((* endif *))}
+
+\section{((( labels.summary )))}
+{\small ((( summary|tex|md_bold )))}
+
+\section{((( labels.skills )))}
+\begin{skilltable}
+((* for row in skill_rows *))
+\skillrow{((( row.category|tex )))}{((( row["items"]|join(', ')|tex )))}
+((* endfor *))
+\end{skilltable}
+
+\section{((( labels.experience )))}
+((* for exp in experience *))
+\cventry{((( exp.title|tex )))}{((( exp.location|tex )))}{((( exp.organization|tex )))}{((( exp.period )))}
+\begin{cvbullets}
+((* for b in exp.bullets *))
+  \item ((( b|tex|md_bold )))
+((* endfor *))
+\end{cvbullets}
+((* endfor *))
+
+((* if projects *))
+\section{((( labels.projects )))}
+\begin{cvlist}
+((* for p in projects *))
+  \item \textbf{((( p.name|tex )))}((* if p.url *)) {(}((( p.url|tex ))){)}((* endif *)) -- ((( p.description|tex|md_bold )))
+((* endfor *))
+\end{cvlist}
+((* endif *))
+
+((* if education *))
+\section{((( labels.education )))}
+((* for e in education *))
+\eduentry{((( e.degree|tex )))}{((( e.period )))}{((( e.institution|tex )))}
+((* endfor *))
+((* endif *))
+
+((* if certifications *))
+\section{((( labels.certifications )))}
+\begin{cvlist}
+((* for c in certifications *))
+  \item \textbf{((( c.name|tex )))}((* if c.issuer *)), ((( c.issuer|tex )))((* endif *))
+((* endfor *))
+\end{cvlist}
+((* endif *))
+
+((* if languages *))
+\section{((( labels.languages )))}
+{\small ((* for l in languages *))\textbf{((( l.name|tex ))):} ((( l.level|tex )))((* if not loop.last *)) \sep ((* endif *))((* endfor *))}
+((* endif *))
+
+\end{document}

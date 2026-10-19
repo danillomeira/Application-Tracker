@@ -1,0 +1,8 @@
+{"jobs": [
+ {"id": 4001, "title": "Senior Data Engineer", "absolute_url": "https://boards.greenhouse.io/globex/jobs/4001",
+  "location": {"name": "Remote - Brazil"}, "first_published": "2026-10-17T12:00:00Z",
+  "content": "&lt;p&gt;We are looking for a &lt;strong&gt;Data Engineer&lt;/strong&gt;.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Python&lt;/li&gt;&lt;li&gt;Spark&lt;/li&gt;&lt;li&gt;Kafka&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;100% remote. Salary R$ 15.000 - R$ 20.000 CLT&lt;/p&gt;"},
+ {"id": 4002, "title": "Frontend Engineer (React)", "absolute_url": "https://boards.greenhouse.io/globex/jobs/4002",
+  "location": {"name": "São Paulo"}, "first_published": "2026-09-01T12:00:00Z",
+  "content": "&lt;p&gt;Presencial em São Paulo. React, TypeScript.&lt;/p&gt;"}
+]}

@@ -1,0 +1,8 @@
+# Finais de linha consistentes entre Windows, macOS e Linux
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

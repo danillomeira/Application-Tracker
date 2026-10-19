@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Assistente — opções</title>
+<style>body{font-family:system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 16px}label{display:block;margin:12px 0 4px;font-size:13px;color:#555}input,textarea{width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}button{margin-top:16px;padding:8px 14px;border:0;border-radius:6px;background:#1d4ed8;color:#fff;cursor:pointer}small{color:#666}</style>
+</head><body>
+<h2>Application Tracker — Assistente</h2>
+<label for="apiUrl">Endereço da API</label><input id="apiUrl" placeholder="http://localhost:8000">
+<label for="token">Token da extensão</label><input id="token" type="password" placeholder="gere em Configurações → Integrações no dashboard">
+<label for="ignored">Sites ignorados (um por linha)</label><textarea id="ignored" rows="4"></textarea>
+<label><input id="enabled" type="checkbox" style="width:auto"> Assistente ativo</label>
+<button id="save">Salvar</button> <span id="status"></span>
+<p><small>O assistente só envia texto ao seu servidor quando a página parece uma vaga ou um formulário de candidatura. Ele nunca envia formulários por você.</small></p>
+<script src="options.js"></script>
+</body></html>

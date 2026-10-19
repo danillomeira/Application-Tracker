@@ -1,0 +1,32 @@
+# Seletores do LinkedIn (RNF-28). Preferir textos acessíveis (role + nome) a classes CSS.
+# Ao atualizar, rode os testes com as fixtures e faça dry run nas 10 primeiras candidaturas.
+version: 1
+base_url: https://www.linkedin.com
+login_url: https://www.linkedin.com/login
+feed_url: https://www.linkedin.com/feed/
+messaging_url: https://www.linkedin.com/messaging/
+search_url: https://www.linkedin.com/jobs/search/
+buttons:
+  easy_apply: ["Easy Apply", "Candidatura simplificada", "Candidatar-se facilmente"]
+  next: ["Next", "Avançar", "Continue", "Continuar", "Próximo"]
+  review: ["Review", "Revisar", "Review your application"]
+  submit: ["Submit application", "Enviar candidatura", "Enviar"]
+  done: ["Done", "Concluído", "Concluir"]
+  dismiss: ["Dismiss", "Fechar", "Descartar"]
+  discard: ["Discard", "Descartar"]
+texts:
+  success: ["application was sent", "candidatura foi enviada", "application submitted", "Your application was sent"]
+  applied: ["Applied", "Candidatou-se", "Candidatura enviada"]
+  closed: ["No longer accepting applications", "Não aceita mais candidaturas", "não está mais aceitando candidaturas"]
+  follow_company: ["Follow", "Seguir"]
+modal: "[role=dialog]"
+search:
+  job_link: "a[href*='/jobs/view/']"
+  detail_pane: ".jobs-search__job-details, .jobs-details, main"
+  applicants_regex: "(\\d[\\d.,]*)\\s+(applicants|candidaturas|candidatos|people clicked apply)"
+  max_per_search: 25
+messaging:
+  conversation: "li.msg-conversation-listitem, li[class*='conversation']"
+  unread_marker: "[class*='unread'], .notification-badge"
+  message_item: "li.msg-s-message-list__event, [class*='message-list'] li"
+  max_conversations: 10

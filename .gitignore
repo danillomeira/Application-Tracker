@@ -1,0 +1,49 @@
+# Dados pessoais: nunca versionar
+data/*
+!data/README.md
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+.next/
+out/
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.toc
+
+# Agente local
+.tracker-agent/
+playwright-report/
+test-results/
+
+# SO / editor
+.DS_Store
+.idea/
+
+# Build/cache do frontend e ferramentas locais
+*.tsbuildinfo
+next-env.d.ts
+.vscode/
+.claude/
+coverage/
+
+# Estado do agendador (Celery beat)
+celerybeat-schedule*

@@ -1,0 +1,78 @@
+% classic.sty: estilo "classic" (uma coluna, seções com régua, compatível com ATS)
+% Uma coluna, Computer Modern, ATS-friendly (texto selecionável, sem tabelas aninhadas complexas).
+% Compilar com pdflatex (ou tectonic).
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{classic}[2026/10/18 Classic resume style]
+
+\RequirePackage{iftex}
+\ifPDFTeX
+  \RequirePackage[T1]{fontenc}
+  \RequirePackage[utf8]{inputenc}
+  \RequirePackage{lmodern}
+  % Texto extraível por ATS (no XeTeX/LuaTeX já é nativo)
+  \input{glyphtounicode}
+  \pdfgentounicode=1
+\else
+  \RequirePackage{fontspec} % padrão do fontspec já é Latin Modern
+\fi
+\RequirePackage[a4paper,top=0.45in,bottom=0.45in,left=0.5in,right=0.5in]{geometry}
+\RequirePackage{titlesec}
+\RequirePackage{enumitem}
+\RequirePackage{tabularx}
+\RequirePackage{xcolor}
+\RequirePackage[hidelinks]{hyperref}
+\RequirePackage[english]{babel}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{0pt}
+\raggedbottom
+\raggedright
+
+% Seções: MAIÚSCULAS, negrito, com linha
+\titleformat{\section}{\bfseries\large\raggedright}{}{0em}{\MakeUppercase}[\vspace{1pt}\titlerule]
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+
+% Listas compactas
+\setlist[itemize]{leftmargin=1.2em,topsep=1pt,itemsep=0.5pt,parsep=0pt,partopsep=0pt,label=\textbullet}
+
+% ---------- Cabeçalho ----------
+% \resumeheader{Nome}{Headline}{linha de contato}{linha de links}
+\newcommand{\resumeheader}[4]{%
+  \begin{center}
+    {\LARGE\bfseries\MakeUppercase{#1}}\\[3pt]
+    {\small\bfseries #2}\\[2pt]
+    {\small #3}\\[1pt]
+    {\small #4}
+  \end{center}
+  \vspace{-6pt}
+}
+\newcommand{\sep}{\enspace|\enspace}
+
+% ---------- Skills ----------
+% \begin{skilltable} \skillrow{Categoria}{itens} ... \end{skilltable}
+\newenvironment{skilltable}
+  {\small\tabularx{\linewidth}{@{}p{1.55in}X@{}}}
+  {\endtabularx\vspace{-2pt}}
+\newcommand{\skillrow}[2]{\textbf{#1} & #2 \\}
+
+% ---------- Experiência ----------
+% \cventry{Cargo}{Local}{Organização}{Período}
+\newcommand{\cventry}[4]{%
+  \vspace{3pt}
+  {\small\textbf{#1}\hfill #2}\\
+  {\small\textit{#3}\hfill #4}
+  \vspace{-1pt}
+}
+\newenvironment{cvbullets}{\small\begin{itemize}}{\end{itemize}}
+
+% ---------- Projetos / certificações ----------
+\newenvironment{cvlist}{\small\begin{itemize}}{\end{itemize}}
+
+% ---------- Formação ----------
+% \eduentry{Curso}{Período}{Instituição}
+\newcommand{\eduentry}[3]{%
+  \vspace{2pt}
+  {\small\textbf{#1}\hfill #2}\\
+  {\small #3}\par
+}

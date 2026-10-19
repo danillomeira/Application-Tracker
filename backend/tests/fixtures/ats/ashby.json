@@ -1,0 +1,5 @@
+{"jobs": [{"id": "z-9", "title": "ML Engineer", "jobUrl": "https://jobs.ashbyhq.com/umbrella/z-9",
+  "applyUrl": "https://jobs.ashbyhq.com/umbrella/z-9/application", "location": "Remote", "isRemote": true,
+  "isListed": true, "publishedAt": "2026-10-16T10:00:00Z",
+  "descriptionHtml": "<p>RAG, Python, Claude API</p>", "descriptionPlain": "RAG, Python, Claude API",
+  "compensation": {"summaryComponents": [{"compensationType": "Salary", "minValue": 8000, "maxValue": 11000, "currencyCode": "USD", "interval": "1 MONTH"}]}}]}

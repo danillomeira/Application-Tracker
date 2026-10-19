@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Application Tracker — Assistente",
+  "version": "0.1.0",
+  "description": "Mostra a avaliação da vaga, preenche formulários com seu perfil, sugere respostas e registra suas candidaturas.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": { "default_title": "Application Tracker", "default_popup": "popup.html" },
+  "options_page": "options.html"
+}

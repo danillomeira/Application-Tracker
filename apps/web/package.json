@@ -1,0 +1,44 @@
+{
+  "name": "application-tracker-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:api": "cd ../../backend && .venv/bin/python -c \"import json,os;os.environ['TRACKER_NO_DOTENV']='1';from tracker.main import app;json.dump(app.openapi(),open('../apps/web/openapi.json','w'),indent=1)\" && cd ../apps/web && openapi-typescript openapi.json -o src/lib/api-schema.d.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.62.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.468.0",
+    "motion": "12.43.0",
+    "next": "15.5.4",
+    "openapi-fetch": "0.13.3",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "sonner": "1.7.1",
+    "tailwind-merge": "2.5.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/react": "16.1.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "4.3.4",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.4",
+    "jsdom": "25.0.1",
+    "openapi-typescript": "7.4.4",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "2.1.8"
+  }
+}

@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: tracker, POSTGRES_PASSWORD: tracker, POSTGRES_DB: tracker_test }
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tracker" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+    defaults:
+      run: { working-directory: backend }
+    env:
+      TRACKER_NO_DOTENV: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { python-version: "3.12" }
+      - run: uv sync --frozen
+      - name: pgvector no banco de teste
+        run: PGPASSWORD=tracker psql -h localhost -p 5433 -U tracker -d tracker_test -c "CREATE EXTENSION IF NOT EXISTS vector"
+      - name: tectonic (LaTeX)
+        run: curl --proto '=https' --tlsv1.2 -fsSL https://drop-sh.fullyjustified.net | sh && sudo mv tectonic /usr/local/bin/
+      - run: uv run playwright install --with-deps chromium
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: xvfb-run -a uv run pytest -q
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run: { working-directory: apps/web }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: apps/web/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  cross-platform:
+    # Smoke em Windows e macOS: instala, importa o app e gera o .env (o resto é coberto no Linux acima).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { python-version: "3.12" }
+      - name: backend
+        working-directory: backend
+        env: { TRACKER_NO_DOTENV: "1" }
+        run: |
+          uv sync --frozen
+          uv run python -c "import tracker.main, tracker.cli; print('ok')"
+          uv run python scripts/smoke_platform.py
+      - name: tracker-init
+        working-directory: backend
+        run: uv run tracker-init --email=ci@example.com
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: web
+        working-directory: apps/web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm build
+

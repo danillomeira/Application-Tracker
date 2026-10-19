@@ -1,0 +1,563 @@
+# Gerado por scripts/discover_boards.py: boards públicos VERIFICADOS (responderam com vagas).
+# Empresas sem board público detectado ficam em `no_public_board` (use a extensão ao navegar no site delas).
+companies:
+- name: Nubank
+  region: BR
+  ats_kind: ashby
+  ats_board_token: nubank
+  open_jobs_at_discovery: 100
+- name: iFood
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: ifoodcarreiras
+  open_jobs_at_discovery: 62
+- name: Itaú Unibanco
+  region: BR
+  ats_kind: smartrecruiters
+  ats_board_token: itauunibanco
+  open_jobs_at_discovery: 136
+- name: XP Inc.
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: xpinc
+  open_jobs_at_discovery: 145
+- name: BTG Pactual
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: btgpactual
+  open_jobs_at_discovery: 272
+- name: Stone
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: stone
+  open_jobs_at_discovery: 370
+- name: PagBank
+  region: BR
+  ats_kind: gupy
+  ats_board_token: pagseguro
+  open_jobs_at_discovery: 812
+- name: Banco Inter
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: inter
+  open_jobs_at_discovery: 161
+- name: C6 Bank
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: c6bank
+  open_jobs_at_discovery: 156
+- name: Neon
+  region: BR
+  ats_kind: lever
+  ats_board_token: neon
+  open_jobs_at_discovery: 9
+- name: Creditas
+  region: BR
+  ats_kind: gupy
+  ats_board_token: creditas
+  open_jobs_at_discovery: 8
+- name: QuintoAndar
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: quintoandar
+  open_jobs_at_discovery: 102
+- name: RD Station
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: rdstation
+  open_jobs_at_discovery: 4
+- name: Localiza&Co
+  region: BR
+  ats_kind: gupy
+  ats_board_token: localiza
+  open_jobs_at_discovery: 662
+- name: Ambev
+  region: BR
+  ats_kind: gupy
+  ats_board_token: ambev
+  open_jobs_at_discovery: 323
+- name: Grupo Boticário
+  region: BR
+  ats_kind: gupy
+  ats_board_token: grupoboticario
+  open_jobs_at_discovery: 228
+- name: Grupo Casas Bahia
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: via
+  open_jobs_at_discovery: 179
+- name: CI&T
+  region: BR
+  ats_kind: lever
+  ats_board_token: ciandt
+  open_jobs_at_discovery: 198
+- name: Stefanini
+  region: BR
+  ats_kind: gupy
+  ats_board_token: stefanini
+  open_jobs_at_discovery: 281
+- name: Thoughtworks
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: thoughtworks
+  open_jobs_at_discovery: 43
+- name: Zup Innovation
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: zupinnovation
+  open_jobs_at_discovery: 3
+- name: Globo
+  region: BR
+  ats_kind: gupy
+  ats_board_token: globo
+  open_jobs_at_discovery: 20
+- name: EBANX
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: ebanx
+  open_jobs_at_discovery: 39
+- name: Sicredi
+  region: BR
+  ats_kind: gupy
+  ats_board_token: sicredi
+  open_jobs_at_discovery: 831
+- name: Wildlife Studios
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: wildlifestudios
+  open_jobs_at_discovery: 16
+- name: VTEX
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: vtex
+  open_jobs_at_discovery: 30
+- name: Wellhub
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: gympass
+  open_jobs_at_discovery: 88
+- name: Asaas
+  region: BR
+  ats_kind: gupy
+  ats_board_token: asaas
+  open_jobs_at_discovery: 24
+- name: Vivo
+  region: BR
+  ats_kind: gupy
+  ats_board_token: vivo
+  open_jobs_at_discovery: 121
+- name: Afya
+  region: BR
+  ats_kind: gupy
+  ats_board_token: afya
+  open_jobs_at_discovery: 159
+- name: Méliuz
+  region: BR
+  ats_kind: gupy
+  ats_board_token: meliuz
+  open_jobs_at_discovery: 3
+- name: Blip
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: blip
+  open_jobs_at_discovery: 2
+- name: Arco Educação
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: arco
+  open_jobs_at_discovery: 442
+- name: Jusbrasil
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: jusbrasil
+  open_jobs_at_discovery: 17
+- name: Gupy
+  region: BR
+  ats_kind: smartrecruiters
+  ats_board_token: gupy
+  open_jobs_at_discovery: 8
+- name: Porto
+  region: BR
+  ats_kind: gupy
+  ats_board_token: porto
+  open_jobs_at_discovery: 182
+- name: WEG
+  region: BR
+  ats_kind: gupy
+  ats_board_token: weg
+  open_jobs_at_discovery: 108
+- name: Suzano
+  region: BR
+  ats_kind: gupy
+  ats_board_token: suzano
+  open_jobs_at_discovery: 60
+- name: Lojas Renner
+  region: BR
+  ats_kind: gupy
+  ats_board_token: renner
+  open_jobs_at_discovery: 110
+- name: Azzas 2154
+  region: BR
+  ats_kind: gupy
+  ats_board_token: azzas2154
+  open_jobs_at_discovery: 2
+- name: Assaí
+  region: BR
+  ats_kind: gupy
+  ats_board_token: assai
+  open_jobs_at_discovery: 3470
+- name: GPA
+  region: BR
+  ats_kind: gupy
+  ats_board_token: gpa
+  open_jobs_at_discovery: 1193
+- name: Rede D'Or
+  region: BR
+  ats_kind: gupy
+  ats_board_token: rededor
+  open_jobs_at_discovery: 2010
+- name: Compass UOL
+  region: BR
+  ats_kind: gupy
+  ats_board_token: compass
+  open_jobs_at_discovery: 17
+- name: Softplan
+  region: BR
+  ats_kind: gupy
+  ats_board_token: softplan
+  open_jobs_at_discovery: 3
+- name: Kovi
+  region: BR
+  ats_kind: gupy
+  ats_board_token: kovi
+  open_jobs_at_discovery: 50
+- name: Banco Pan
+  region: BR
+  ats_kind: greenhouse
+  ats_board_token: bancopan
+  open_jobs_at_discovery: 13
+- name: Bemobi
+  region: BR
+  ats_kind: gupy
+  ats_board_token: bemobi
+  open_jobs_at_discovery: 26
+- name: Stripe
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: stripe
+  open_jobs_at_discovery: 731
+- name: Airbnb
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: airbnb
+  open_jobs_at_discovery: 173
+- name: Databricks
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: databricks
+  open_jobs_at_discovery: 898
+- name: Snowflake
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: snowflake
+  open_jobs_at_discovery: 359
+- name: Datadog
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: datadog
+  open_jobs_at_discovery: 433
+- name: Cloudflare
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: cloudflare
+  open_jobs_at_discovery: 433
+- name: GitLab
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: gitlab
+  open_jobs_at_discovery: 232
+- name: Coinbase
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: coinbase
+  open_jobs_at_discovery: 226
+- name: Robinhood
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: robinhood
+  open_jobs_at_discovery: 153
+- name: Spotify
+  region: INTL
+  ats_kind: lever
+  ats_board_token: spotify
+  open_jobs_at_discovery: 82
+- name: Palantir
+  region: INTL
+  ats_kind: lever
+  ats_board_token: palantir
+  open_jobs_at_discovery: 310
+- name: Plaid
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: plaid
+  open_jobs_at_discovery: 127
+- name: Figma
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: figma
+  open_jobs_at_discovery: 139
+- name: Notion
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: notion
+  open_jobs_at_discovery: 128
+- name: OpenAI
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: openai
+  open_jobs_at_discovery: 813
+- name: Anthropic
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: anthropic
+  open_jobs_at_discovery: 656
+- name: Ramp
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: ramp
+  open_jobs_at_discovery: 167
+- name: Remote
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: remote
+  open_jobs_at_discovery: 2
+- name: Canonical
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: canonical
+  open_jobs_at_discovery: 309
+- name: Elastic
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: elastic
+  open_jobs_at_discovery: 380
+- name: MongoDB
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: mongodb
+  open_jobs_at_discovery: 401
+- name: Grafana Labs
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: grafanalabs
+  open_jobs_at_discovery: 114
+- name: Twilio
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: twilio
+  open_jobs_at_discovery: 133
+- name: Okta
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: okta
+  open_jobs_at_discovery: 387
+- name: Zapier
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: zapier
+  open_jobs_at_discovery: 11
+- name: DoorDash
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: doordashusa
+  open_jobs_at_discovery: 456
+- name: Instacart
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: instacart
+  open_jobs_at_discovery: 126
+- name: Lyft
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: lyft
+  open_jobs_at_discovery: 183
+- name: Pinterest
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: pinterest
+  open_jobs_at_discovery: 156
+- name: Reddit
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: reddit
+  open_jobs_at_discovery: 145
+- name: Discord
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: discord
+  open_jobs_at_discovery: 47
+- name: Duolingo
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: duolingo
+  open_jobs_at_discovery: 63
+- name: Asana
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: asana
+  open_jobs_at_discovery: 103
+- name: Dropbox
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: dropbox
+  open_jobs_at_discovery: 18
+- name: Airtable
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: airtable
+  open_jobs_at_discovery: 4
+- name: Brex
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: brex
+  open_jobs_at_discovery: 260
+- name: Gusto
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: gusto
+  open_jobs_at_discovery: 104
+- name: Vercel
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: vercel
+  open_jobs_at_discovery: 93
+- name: Supabase
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: supabase
+  open_jobs_at_discovery: 54
+- name: Hugging Face
+  region: INTL
+  ats_kind: workable
+  ats_board_token: huggingface
+  open_jobs_at_discovery: 6
+- name: Bosch
+  region: INTL
+  ats_kind: smartrecruiters
+  ats_board_token: BoschGroup
+  open_jobs_at_discovery: 5079
+- name: Toptal
+  region: INTL
+  ats_kind: lever
+  ats_board_token: toptal
+  open_jobs_at_discovery: 32
+- name: Wikimedia
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: wikimedia
+  open_jobs_at_discovery: 13
+- name: Sentry
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: sentry
+  open_jobs_at_discovery: 46
+- name: PostHog
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: posthog
+  open_jobs_at_discovery: 10
+- name: Linear
+  region: INTL
+  ats_kind: ashby
+  ats_board_token: linear
+  open_jobs_at_discovery: 29
+- name: Scale AI
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: scaleai
+  open_jobs_at_discovery: 182
+- name: Samsara
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: samsara
+  open_jobs_at_discovery: 262
+- name: Affirm
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: affirm
+  open_jobs_at_discovery: 212
+- name: Chime
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: chime
+  open_jobs_at_discovery: 72
+- name: SoFi
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: sofi
+  open_jobs_at_discovery: 49
+- name: Nuro
+  region: INTL
+  ats_kind: greenhouse
+  ats_board_token: nuro
+  open_jobs_at_discovery: 108
+no_public_board:
+- Mercado Livre
+- PicPay
+- Loft
+- Hotmart
+- TOTVS
+- Natura &Co
+- Magalu
+- Raízen
+- Vale
+- Embraer
+- Cielo
+- Unico
+- Olist
+- Contabilizei
+- Dock
+- Pismo
+- Cora
+- Serasa Experian
+- Dasa
+- Sympla
+- Conta Azul
+- Movile
+- CloudWalk
+- Trybe
+- Alura
+- Santander Brasil
+- Bradesco
+- SulAmérica
+- Gerdau
+- Votorantim
+- Carrefour Brasil
+- Unilever Brasil
+- Nestlé Brasil
+- Hapvida NotreDame
+- Einstein
+- CPFL
+- Energisa
+- Neoenergia
+- Claro
+- TIM Brasil
+- Sankhya
+- Senior Sistemas
+- Locaweb
+- Zé Delivery
+- Quero Educação
+- Tembici
+- Capgemini Brasil
+- NTT DATA Brasil
+- Avanade
+- Accenture Brasil
+- Neoway
+- Ifood Benefícios
+- Deel
+- Confluent
+- dbt Labs
+- HashiCorp
+- Rippling
+- Automattic
+- Retool

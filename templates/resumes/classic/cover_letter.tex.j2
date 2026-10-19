@@ -1,0 +1,24 @@
+((# cover_letter.tex.j2: carta de apresentação no estilo classic. #))
+\documentclass[10pt]{article}
+\usepackage{classic}
+
+\begin{document}
+
+\resumeheader{((( contact.full_name|tex )))}
+  {((( title|tex )))}
+  {((( contact.email|tex ))) \sep ((( contact.phone|tex ))) \sep ((( contact.location|tex )))}
+  {\href{https://((( contact.linkedin )))}{((( contact.linkedin|tex )))} \sep \href{https://((( contact.github )))}{((( contact.github|tex )))}}
+
+\vspace{12pt}
+{\small
+((* if lang == "pt" *))Prezada equipe da ((( company|tex ))),((* else *))Dear ((( company|tex ))) team,((* endif *))
+
+\vspace{6pt}
+((( body|tex|md_bold )))
+
+\vspace{8pt}
+((* if lang == "pt" *))Atenciosamente,((* else *))Best regards,((* endif *))\\
+((( contact.full_name|tex )))
+}
+
+\end{document}

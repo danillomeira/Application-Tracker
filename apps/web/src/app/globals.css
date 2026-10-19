@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tema claro (padrão). Paleta índigo com fundo levemente frio para os cartões "flutuarem". */
+:root {
+  --background: #f6f7fb;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --muted: #eef1f6;
+  --muted-foreground: #64748b;
+  --border: #e3e7ef;
+  --primary: #4f46e5;
+  --primary-strong: #4338ca;
+  --primary-foreground: #ffffff;
+  --accent: #eef0ff;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --ring: #6366f1;
+  --sidebar: #ffffff;
+  --shadow-color: 222 47% 11%;
+}
+
+/* Tema escuro: segue o sistema, a menos que o usuário escolha claro (.light) no seletor. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #0a0d16;
+    --foreground: #e5e9f2;
+    --card: #11151f;
+    --muted: #1a2030;
+    --muted-foreground: #94a0b8;
+    --border: #232a3b;
+    --primary: #818cf8;
+    --primary-strong: #a5b4fc;
+    --primary-foreground: #0a0d16;
+    --accent: #1e1b4b;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --ring: #818cf8;
+    --sidebar: #0d1119;
+    --shadow-color: 0 0% 0%;
+  }
+}
+
+.dark {
+  --background: #0a0d16;
+  --foreground: #e5e9f2;
+  --card: #11151f;
+  --muted: #1a2030;
+  --muted-foreground: #94a0b8;
+  --border: #232a3b;
+  --primary: #818cf8;
+  --primary-strong: #a5b4fc;
+  --primary-foreground: #0a0d16;
+  --accent: #1e1b4b;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --ring: #818cf8;
+  --sidebar: #0d1119;
+  --shadow-color: 0 0% 0%;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --shadow-soft: 0 1px 2px hsl(var(--shadow-color) / 0.04), 0 4px 16px -4px hsl(var(--shadow-color) / 0.08);
+  --shadow-lift: 0 2px 4px hsl(var(--shadow-color) / 0.06), 0 16px 32px -12px hsl(var(--shadow-color) / 0.18);
+  --animate-shimmer: shimmer 1.6s infinite linear;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  html:not(.light) {
+    color-scheme: dark;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+/* Barras de rolagem discretas */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Acessibilidade: quem pede menos movimento não vê animações. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

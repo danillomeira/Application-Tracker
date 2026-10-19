@@ -1,0 +1,6 @@
+[{"id": "abc-123", "text": "Backend Engineer", "hostedUrl": "https://jobs.lever.co/initech/abc-123",
+  "applyUrl": "https://jobs.lever.co/initech/abc-123/apply", "createdAt": 1760700000000,
+  "categories": {"location": "Remote", "team": "Platform"}, "workplaceType": "remote",
+  "descriptionPlain": "Build APIs with Python and FastAPI.",
+  "lists": [{"text": "Requirements", "content": "<li>Python</li><li>PostgreSQL</li>"}],
+  "additionalPlain": "", "salaryRange": {"min": 90000, "max": 120000, "currency": "USD", "interval": "per-year-salary"}}]

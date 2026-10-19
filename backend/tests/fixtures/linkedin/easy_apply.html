@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Senior Data Engineer | Globex | LinkedIn</title>
+<style>.step{display:none}.step.active{display:block}[role=dialog]{border:1px solid #ccc;padding:16px}</style></head>
+<body>
+<main>
+  <h1>Senior Data Engineer</h1><p>Globex · Remote · 2 hours ago · 37 applicants</p>
+  <button id="ea">Easy Apply</button>
+  <div class="description">We need Python, Spark and Kafka.</div>
+</main>
+<div id="modal" role="dialog" aria-label="Apply to Globex" hidden>
+  <button aria-label="Dismiss" id="dismiss">×</button>
+  <div class="step active" data-step="1">
+    <h3>Contact info</h3>
+    <label for="fn">First name</label><input id="fn" required value="Ana">
+    <label for="ln">Last name</label><input id="ln" required>
+    <label for="em">Email address</label><select id="em" required><option value="">Select an option</option><option>ana@example.com</option></select>
+    <label for="cc">Phone country code</label><select id="cc" required><option value="">Select an option</option><option>United States (+1)</option><option>Brazil (+55)</option></select>
+    <label for="ph">Mobile phone number</label><input id="ph" type="tel" required>
+    <button class="next">Next</button>
+  </div>
+  <div class="step" data-step="2">
+    <h3>Resume</h3>
+    <label for="cv">Upload resume</label><input id="cv" type="file" accept=".pdf">
+    <button class="next">Next</button>
+  </div>
+  <div class="step" data-step="3">
+    <h3>Additional Questions</h3>
+    <label for="yp">How many years of experience do you have with Python?</label>
+    <input id="yp" type="number" required aria-describedby="yp-err"><span id="yp-err"></span>
+    <label for="lvl">What is your level of English?</label>
+    <select id="lvl" required><option value="">Select an option</option><option>Basic</option><option>Intermediate</option><option>Advanced</option><option>Native</option></select>
+    <fieldset aria-required="true"><legend>Will you now or in the future require sponsorship for employment visa status?</legend>
+      <input type="radio" name="sp" id="sp-y" value="Yes"><label for="sp-y">Yes</label>
+      <input type="radio" name="sp" id="sp-n" value="No"><label for="sp-n">No</label>
+    </fieldset>
+    <label for="why">Why do you want to work at Globex?</label><textarea id="why"></textarea>
+    <button class="review">Review</button>
+  </div>
+  <div class="step" data-step="4">
+    <h3>Review your application</h3>
+    <input type="checkbox" id="follow" checked><label for="follow">Follow Globex to stay up to date</label>
+    <button id="submit">Submit application</button>
+  </div>
+  <div class="step" data-step="5"><h3>Application sent</h3><p>Your application was sent to Globex!</p><button>Done</button></div>
+</div>
+<div id="discard" role="alertdialog" hidden><p>Save this application?</p><button id="discardbtn">Discard</button></div>
+<script>
+  window.submitted = null;
+  const show = n => document.querySelectorAll('.step').forEach(s => s.classList.toggle('active', s.dataset.step == n));
+  document.getElementById('ea').onclick = () => { document.getElementById('modal').hidden = false; };
+  document.querySelectorAll('.next').forEach(b => b.onclick = () => {
+    const cur = +document.querySelector('.step.active').dataset.step; show(cur + 1); });
+  document.querySelector('.review').onclick = () => {
+    const yp = document.getElementById('yp');
+    if (!yp.value) { yp.setAttribute('aria-invalid', 'true'); document.getElementById('yp-err').innerText = 'Enter a whole number'; return; }
+    yp.removeAttribute('aria-invalid'); show(4); };
+  document.getElementById('submit').onclick = () => {
+    window.submitted = {
+      fn: fn.value, ln: ln.value, em: em.value, cc: cc.value, ph: ph.value, cv: cv.files.length ? cv.files[0].name : null,
+      yp: yp.value, lvl: lvl.value, sp: (document.querySelector('input[name=sp]:checked')||{}).value || null,
+      why: why.value, follow: follow.checked };
+    show(5); };
+  document.getElementById('dismiss').onclick = () => { document.getElementById('discard').hidden = false; };
+  document.getElementById('discardbtn').onclick = () => { document.getElementById('modal').hidden = true; document.getElementById('discard').hidden = true; window.discarded = true; };
+</script>
+</body></html>

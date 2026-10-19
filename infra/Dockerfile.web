@@ -1,0 +1,20 @@
+# Dashboard Next.js. Build a partir da raiz: docker build -f infra/Dockerfile.web --build-arg API_INTERNAL_URL=http://api:8000 .
+# As chamadas /api passam pelo rewrite do Next (definido no build).
+FROM node:20-alpine AS build
+RUN corepack enable
+WORKDIR /app
+COPY apps/web/package.json apps/web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY apps/web/ ./
+ARG API_INTERNAL_URL=http://api:8000
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
+ENV API_INTERNAL_URL=$API_INTERNAL_URL NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+RUN pnpm build
+
+FROM node:20-alpine
+RUN corepack enable
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app ./
+EXPOSE 3100
+CMD ["pnpm", "start"]

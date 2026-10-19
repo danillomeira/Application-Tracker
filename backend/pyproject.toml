@@ -1,0 +1,95 @@
+[project]
+name = "tracker"
+version = "0.1.0"
+description = "Application Tracker: assistente pessoal de busca de emprego com IA"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+    "celery[redis]>=5.4",
+    "redis>=5.2",
+    "httpx>=0.28",
+    "cryptography>=44",
+    "itsdangerous>=2.2",
+    "anthropic>=0.70",
+    "python-json-logger>=3.2",
+    "uuid-utils>=0.10",
+    "boto3>=1.43.114",
+    "nh3>=0.3.7",
+    "jinja2>=3.1.6",
+    "pypdf>=6.21.1",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
+    "fastembed>=0.9.0",
+    "python-docx>=1.2.0",
+    "playwright>=1.64.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "pyright>=1.1.390",
+]
+
+[project.scripts]
+tracker-api = "tracker.cli:run_api"
+tracker-worker = "tracker.cli:run_worker"
+tracker-beat = "tracker.cli:run_beat"
+tracker-agent = "tracker.agent.runner:main"
+tracker-seed = "tracker.cli:run_seed"
+tracker-init = "tracker.cli:run_init"
+tracker-dev = "tracker.cli:run_dev"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tracker"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "S", "SIM", "RUF"]
+ignore = [
+    "S101",    # assert
+    "B008",    # File(...)/Depends(...) em defaults é o padrão do FastAPI
+    "RUF001", "RUF002", "RUF003",  # texto em português com travessões e aspas tipográficas
+    "SIM105",  # try/except/pass explícito é mais legível em fluxos de integração
+    "SIM102",  # ifs aninhados com comentário próprio são mais claros
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "S603", "ASYNC240", "E501", "E702", "RUF059"]
+"src/tracker/core/config.py" = ["S105"]
+"src/tracker/agent/human.py" = ["S311"]
+"src/tracker/agent/**" = ["E501"]  # JavaScript embutido para o navegador
+"src/tracker/modules/**/tasks.py" = ["E501"]  # montagem de prompts
+"src/tracker/modules/interviews/service.py" = ["E501"]
+"src/tracker/modules/resumes/content.py" = ["E501"]
+"src/tracker/modules/assistant/*.py" = ["E501"]
+
+[tool.pyright]
+include = ["src"]  # testes usam objetos falsos e Optional sem narrowing
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]

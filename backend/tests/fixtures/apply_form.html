@@ -13,16 +13,22 @@
   <label for="li">LinkedIn profile</label><input id="li" name="linkedin">
   <label for="cv">Resume/CV</label><input id="cv" type="file" name="resume">
   <label for="years">How many years of experience do you have with Python?</label><input id="years" type="number" name="years">
+  <label for="eng">Nível de inglês</label>
+  <select id="eng" name="english"><option value="">Selecione</option><option value="1">Básico</option><option value="2">Intermediário</option><option value="3">Avançado</option><option value="4">Fluente</option></select>
+  <label for="why">Why do you want to work at Globex?</label><textarea id="why" name="why"></textarea>
   <fieldset><legend>Will you now or in the future require visa sponsorship?</legend>
     <input type="radio" name="spons" id="s-y" value="Yes"><label for="s-y">Yes</label>
     <input type="radio" name="spons" id="s-n" value="No"><label for="s-n">No</label>
   </fieldset>
+  <button type="button" id="next">Next step</button>
+  <div id="step2" hidden><label for="gh">GitHub profile</label><input id="gh" name="github"></div>
   <button type="submit">Submit application</button>
 </form>
 <script>
+  document.getElementById('next').onclick = () => { document.getElementById('step2').hidden = false; };
   document.getElementById('apply').onsubmit = (e) => {
     e.preventDefault();
-    window.sent = { first: first.value, last: last.value, email: email.value, phone: phone.value, li: li.value,
+    window.sent = { first: first.value, last: last.value, email: email.value, phone: phone.value, li: li.value, eng: eng.value, why: why.value, gh: gh.value,
       cv: cv.files[0] ? cv.files[0].name : null, years: years.value, spons: (document.querySelector('input[name=spons]:checked') || {}).value };
     document.body.innerHTML = '<h1>Thank you for applying!</h1><p>We have received your application.</p>';
   };

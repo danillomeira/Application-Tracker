@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from tracker.modules.agent_gateway import router as agent
 from tracker.modules.analytics import router as insights
 from tracker.modules.analytics.dashboard import router as dashboard_router
 from tracker.modules.applications import router as applications
@@ -39,7 +38,6 @@ api_router.include_router(jobs.searches_router)
 api_router.include_router(companies_router)
 api_router.include_router(scoring_router)
 api_router.include_router(applications.router)
-api_router.include_router(applications.review_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(inbox.router)
 api_router.include_router(inbox.drafts_router)
@@ -50,8 +48,6 @@ api_router.include_router(telegram_router)
 api_router.include_router(interviews.router)
 api_router.include_router(interviews.mock_router)
 api_router.include_router(interviews.assessments_router)
-api_router.include_router(agent.router)
-api_router.include_router(agent.user_router)
 api_router.include_router(people_router)
 api_router.include_router(data_router)
 api_router.include_router(offers_router)

@@ -107,7 +107,6 @@ async def transition(
 async def register_submission(
     session: AsyncSession, app: Application, actor: str, channel: str | None, submitted_at: datetime | None = None
 ) -> None:
-    from tracker.modules.agent_gateway.models import AgentJob
     from tracker.modules.jobs import service as job_service
     from tracker.modules.scoring.models import JobScore
 
@@ -125,12 +124,6 @@ async def register_submission(
         await transition(session, app, "submitted", actor=actor, force=True, payload={"manual": actor == "user"})
     app.submitted_at = submitted_at or app.submitted_at or datetime.now(UTC)
     app.next_action = None
-    for aj in (
-        await session.scalars(
-            select(AgentJob).where(AgentJob.application_id == app.id, AgentJob.status.in_(["pending", "paused"]))
-        )
-    ).all():
-        aj.status = "cancelled"
 
 
 async def quota_used(session: AsyncSession, kind: str) -> int:

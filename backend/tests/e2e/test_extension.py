@@ -132,27 +132,41 @@ async def test_extension_end_to_end(servers, session, tmp_path) -> None:
             await page.goto(f"{servers['web']}/apply_form.html")
             panel = page.locator("#tracker-assistant")
             await panel.get_by_text("Senior Data Engineer").wait_for(timeout=15000)  # cartão da vaga conhecida
-            await panel.get_by_text("Preencher").first.click()
-            await panel.get_by_text("campo(s) preenchido(s)").wait_for(timeout=15000)
-
+            # preenche SOZINHO ao abrir (sem clicar em nada)
+            await panel.get_by_text("preenchido(s) automaticamente").wait_for(timeout=15000)
             assert await page.input_value("#first") == "Ana"
             assert await page.input_value("#last") == "Teste Silva"
             assert await page.input_value("#email") == "ana@example.com"
             assert await page.input_value("#li") == "https://linkedin.com/in/ana-teste"
             assert int(await page.input_value("#years")) >= 5  # calculado pelo mestre
+            assert await page.input_value("#eng") == "3"  # "Advanced" do perfil → opção "Avançado"
             assert await page.evaluate("document.getElementById('cv').files[0].name") == "Ana_Silva_Data_Engineer_EN.pdf"
             assert not await page.is_checked("#s-n")  # sensível: fica para o usuário
+            assert await page.input_value("#why") == ""  # pergunta aberta: só com IA, a pedido
 
-            # sugestão ao focar um campo vazio
+            # etapa seguinte: campo novo é preenchido assim que aparece
+            await page.click("#next")
+            await page.wait_for_function("document.getElementById('gh').value.includes('ana-teste')", timeout=15000)
+
+            # "Completar com IA" escreve a pergunta aberta
+            await panel.get_by_text("Completar com IA").click()
+            await page.wait_for_function("document.getElementById('why').value.length > 10", timeout=20000)
+
+            # sugestão ao clicar num campo vazio, e "Usar" preenche de verdade
             await page.fill("#phone", "")
-            await page.click("h1")  # tira o foco
-            await page.click("#phone")  # usuário clica no campo vazio
+            await page.click("h1")
+            await page.hover("#phone", position={"x": 4, "y": 4})  # parte visível: o painel sai da frente
+            await page.wait_for_timeout(400)
+            await page.click("#phone")
             await page.get_by_text("💡").wait_for(timeout=10000)
+            await page.get_by_role("button", name="Usar").dispatch_event("mousedown")
+            await page.wait_for_function("document.getElementById('phone').value.length > 5", timeout=5000)
 
+            await panel.locator('button[title="Minimizar"]').click()  # tira o painel da frente
             await page.click("label[for=s-n]")  # o usuário responde a pergunta sensível
             await page.click("text=Submit application")  # e ele mesmo envia
             sent = await page.evaluate("window.sent")
-            assert sent["spons"] == "No" and sent["cv"] == "Ana_Silva_Data_Engineer_EN.pdf"
+            assert sent["spons"] == "No" and sent["cv"] == "Ana_Silva_Data_Engineer_EN.pdf" and sent["eng"] == "3"
             await page.locator("#tracker-assistant").get_by_text("acompanhamento").wait_for(timeout=15000)
         finally:
             await ctx.close()

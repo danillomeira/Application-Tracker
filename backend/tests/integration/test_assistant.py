@@ -217,3 +217,43 @@ async def test_analyze_reuses_same_site_job_with_different_company_name(
                                       "requirements_nice": [], "language": "pt"})  # fmt: skip
     r = await anon_client.post("/api/v1/assistant/analyze", headers=H, json={"url": "https://x.com/pagina", "text": "algo"})
     assert r.status_code == 422
+
+
+async def test_linkedin_list_import_then_enrich_on_open(anon_client: AsyncClient, session, ai: FakeAIClient, dispatched) -> None:
+    """Sem robô: a lista que você vê no LinkedIn vira vagas; ao abrir uma, a descrição completa a vaga."""
+    await _auth(session)
+    await factories.seed_master(session)
+    body = {"source": "linkedin", "jobs": [
+        {"external_id": "4011111111", "title": "Data Engineer", "company": "Initech", "location": "Brazil (Remote)", "easy_apply": True},
+        {"external_id": "4022222222", "title": "Backend Engineer", "company": "Hooli", "location": "São Paulo"},
+        {"external_id": "4033333333", "title": "", "company": "X"},  # incompleta: ignorada
+    ]}  # fmt: skip
+    r = await anon_client.post("/api/v1/assistant/import-list", headers=H, json=body)
+    assert r.json() == {"created": 2, "existing": 0}
+    assert [d for d in dispatched if d[0] == "ai.process_job"].__len__() == 2
+    r = await anon_client.post("/api/v1/assistant/import-list", headers=H, json=body)
+    assert r.json() == {"created": 0, "existing": 2}
+
+    page = {"url": "https://www.linkedin.com/jobs/view/4011111111/", "title": "Data Engineer | Initech",
+            "text": "Data Engineer · Initech. About the job. Responsibilities: build pipelines. Requirements: Python, Spark. " * 10}  # fmt: skip
+    r = await anon_client.post("/api/v1/assistant/page", headers=H, json=page)
+    assert r.json()["known"] is True and r.json()["needs_details"] is True
+    ai.on("job.extract", lambda req: {"title": "Data Engineer", "company_name": "Initech", "requirements_must": ["Python", "Spark"],
+                                      "requirements_nice": [], "language": "en", "work_model": "remote"})  # fmt: skip
+    r = await anon_client.post("/api/v1/assistant/analyze", headers=H, json=page)
+    assert r.status_code == 200 and r.json()["requirements"]["must"] == ["Python", "Spark"]
+    r = await anon_client.post("/api/v1/assistant/page", headers=H, json=page)
+    assert r.json()["needs_details"] is False  # completa: não pede de novo
+
+
+async def test_linkedin_alert_email_becomes_jobs_without_ai(session, ai: FakeAIClient, dispatched) -> None:
+    from tests.unit.test_linkedin_alerts import mail
+    from tracker.modules.inbox.service import process_email
+    from tracker.modules.jobs.models import Job
+
+    row = await process_email(session, ai, mail())
+    await session.commit()
+    assert row is not None and row.classification == "notificacao_linkedin" and "2 vaga(s)" in row.extracted["summary"]
+    titles = sorted(j.title for j in (await session.scalars(select(Job))).all())
+    assert titles == ["Data Engineer", "Senior Analytics Engineer"]
+    assert not [c for c in ai.calls if c.task == "email.classify"]  # alerta não gasta IA

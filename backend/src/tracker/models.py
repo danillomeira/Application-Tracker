@@ -1,7 +1,6 @@
 """Importa todos os modelos (Alembic e criação de metadata)."""
 
 from tracker.core.db import Base
-from tracker.modules.agent_gateway.models import AgentJob
 from tracker.modules.applications.models import (
     Application,
     ApplicationAnswer,
@@ -25,7 +24,6 @@ from tracker.modules.people.models import Person, PersonApplication
 from tracker.modules.platform.models import (
     AiCall,
     AuditLog,
-    BrowserSessionMeta,
     IntegrationState,
     Notification,
     OAuthCredential,
@@ -46,7 +44,6 @@ from tracker.modules.resumes.models import ResumeRender, ResumeTemplate, ResumeV
 from tracker.modules.scoring.models import JobScore, ScoringWeights
 
 __all__ = [
-    "AgentJob",
     "AiCall",
     "AnswerBankEntry",
     "Application",
@@ -56,7 +53,6 @@ __all__ = [
     "AuditLog",
     "Base",
     "BlocklistEntry",
-    "BrowserSessionMeta",
     "CalendarEvent",
     "Company",
     "CompanyProfile",

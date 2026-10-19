@@ -521,6 +521,21 @@ class FakeAIClient(BaseAIClient):
         return AIResult(output=parsed, model="fake", cost_usd=0.0)
 
 
+FAKE_QUESTION = re.compile(r'<question key="([^"]+)"[^>]*>([^|<]*)(?:\| opções: ([^<]*))?</question>')
+
+
+def _fake_form_answers(req: AIRequest) -> dict[str, Any]:
+    """AI_FAKE=true (demonstração/testes ponta a ponta): responde cada pergunta do formulário com um texto de exemplo."""
+    text = req.user if isinstance(req.user, str) else ""
+    answers: list[dict[str, Any]] = []
+    for key, label, opts in FAKE_QUESTION.findall(text):
+        if opts:
+            answers.append({"key": key, "value": opts.split(" ; ")[0].split("=", 1)[-1], "option_index": 0, "confidence": 0.6})
+        else:
+            answers.append({"key": key, "value": f"Resposta de exemplo (IA simulada) para: {label.strip()}", "confidence": 0.6})
+    return {"answers": answers}
+
+
 _override: AIClient | None = None
 
 
@@ -530,7 +545,9 @@ def get_ai(sessionmaker: async_sessionmaker[AsyncSession]) -> AIClient:
         return _override
     s = get_settings()
     if s.ai_fake:
-        return FakeAIClient(sessionmaker)
+        fake = FakeAIClient(sessionmaker)
+        fake.on("apply.answer", _fake_form_answers)
+        return fake
     if s.ai_backend == "claude_code" or (s.ai_backend == "auto" and not s.anthropic_api_key):
         return ClaudeCodeClient(sessionmaker)
     return ClaudeClient(sessionmaker)

@@ -44,7 +44,6 @@ dev = [
 tracker-api = "tracker.cli:run_api"
 tracker-worker = "tracker.cli:run_worker"
 tracker-beat = "tracker.cli:run_beat"
-tracker-agent = "tracker.agent.runner:main"
 tracker-seed = "tracker.cli:run_seed"
 tracker-init = "tracker.cli:run_init"
 tracker-dev = "tracker.cli:run_dev"

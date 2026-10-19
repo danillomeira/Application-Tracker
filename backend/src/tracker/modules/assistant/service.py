@@ -141,6 +141,11 @@ async def find_job(session: AsyncSession, url: str) -> Job | None:
     )
 
 
+def is_thin(job: Job) -> bool:
+    """Vaga sem descrição de verdade (ex.: só o cartão da lista de busca)."""
+    return len((job.description_text or "").strip()) < 600
+
+
 async def find_job_same_site(session: AsyncSession, url: str, title: str) -> Job | None:
     """Vaga aberta com o mesmo título no mesmo site de carreiras: evita duplicar quando o nome da empresa varia
     ("Stefanini" x "Stefanini Group") ou a URL é de outra tela do mesmo processo."""

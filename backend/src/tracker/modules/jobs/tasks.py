@@ -247,13 +247,6 @@ async def run_saved_search(sm: SM, search_id: str) -> dict[str, Any]:
         for cid in ids:
             dispatch("ingest.poll_company", company_id=str(cid))
         result["monitored_companies"] = len(ids)
-    if "linkedin" in sources:
-        from tracker.modules.agent_gateway.service import enqueue_agent_job
-
-        async with sm() as s:
-            await enqueue_agent_job(s, "search", {"saved_search_id": search_id, "query": query, "filters": filters})
-            await s.commit()
-        result["linkedin"] = "agendada no agente local"
     if "boards" in sources:
         from tracker.modules.jobs import relevance
 

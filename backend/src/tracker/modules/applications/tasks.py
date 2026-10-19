@@ -11,8 +11,6 @@ from sqlalchemy import select
 
 from tracker.core import settings_store
 from tracker.core.tasks import dispatch
-from tracker.modules.agent_gateway.models import AgentJob
-from tracker.modules.agent_gateway.service import enqueue_agent_job
 from tracker.modules.applications import service
 from tracker.modules.applications.models import Application, PendingQuestion
 from tracker.modules.jobs.models import Job
@@ -24,8 +22,6 @@ from tracker.workers.celery_app import celery_app
 from tracker.workers.runtime import SM, run
 
 log = logging.getLogger(__name__)
-
-ASSISTED_ATS = {"greenhouse", "lever", "gupy"}
 
 
 async def prepare(sm: SM, application_id: str) -> dict[str, Any]:
@@ -40,7 +36,6 @@ async def prepare(sm: SM, application_id: str) -> dict[str, Any]:
         score = await current_score(s, job.id)
         selection = await resume_service.select_for_job(s, job)
         job_id, quadrant = str(job.id), score.quadrant if score else "volume"
-        apply_kind, ats_kind = job.apply_kind, job.ats_kind
         variant_id = str(app.resume_variant_id) if app.resume_variant_id else None
         needs_tailored = selection["needs_tailored"]
         best = str(selection["best_variant_id"]) if selection["best_variant_id"] else None
@@ -96,31 +91,8 @@ async def prepare(sm: SM, application_id: str) -> dict[str, Any]:
     async with sm() as s:
         app = await s.get(Application, uuid.UUID(application_id))
         assert app is not None
-        policy = await settings_store.get(s, "automation_policy")
-        if apply_kind == "easy_apply" and await settings_store.flag(s, "linkedin_agent"):
-            await enqueue_agent_job(
-                s,
-                "apply",
-                {
-                    "application_id": application_id,
-                    "job_id": job_id,
-                    "dry_run": bool(policy["easy_apply"].get("dry_run")),
-                },
-                priority=app.queue_priority,
-                application_id=app.id,
-            )
-            app.next_action = "na fila do agente (Easy Apply)"
-        elif ats_kind in ASSISTED_ATS:
-            await enqueue_agent_job(
-                s,
-                "fill_external",
-                {"application_id": application_id, "job_id": job_id, "ats": ats_kind},
-                priority=app.queue_priority,
-                application_id=app.id,
-            )
-            app.next_action = "preenchimento assistido no agente; revise e envie"
-        else:
-            app.next_action = "candidatura externa: abra o pacote e marque 'enviei'"
+        # sem robô: você se candidata no site da vaga; a extensão do navegador preenche o formulário
+        app.next_action = "candidate-se no site da vaga (o assistente do navegador preenche) e marque 'Já me candidatei'"
         await s.commit()
     return {"status": "routed", "variant_id": variant_id}
 
@@ -164,11 +136,6 @@ async def expire_pending(sm: SM, now: datetime | None = None) -> int:
             app = await s.get(Application, pq.application_id)
             if app and app.status == "needs_input":
                 await service.transition(s, app, "skipped", reason="pergunta pendente expirou")
-            job = await s.scalar(
-                select(AgentJob).where(AgentJob.application_id == pq.application_id, AgentJob.status == "paused")
-            )
-            if job:
-                job.status = "cancelled"
         await s.commit()
         return len(rows)
 
@@ -176,23 +143,6 @@ async def expire_pending(sm: SM, now: datetime | None = None) -> int:
 @celery_app.task(name="applications.expire_pending")
 def expire_pending_task() -> int:
     return run(lambda sm: expire_pending(sm))
-
-
-@celery_app.task(name="applications.reap_agent_leases")
-def reap_agent_leases() -> int:
-    async def body(sm: SM) -> int:
-        now = datetime.now(UTC)
-        async with sm() as s:
-            rows = (
-                await s.scalars(select(AgentJob).where(AgentJob.status.in_(["leased", "running"]), AgentJob.lease_until < now))
-            ).all()
-            for j in rows:
-                j.status = "failed" if j.attempts >= 3 else "pending"
-                j.error = "lease expirado (agente sem heartbeat)"
-            await s.commit()
-            return len(rows)
-
-    return run(body)
 
 
 @celery_app.task(name="applications.suggest_followups")

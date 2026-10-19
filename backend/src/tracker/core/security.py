@@ -1,11 +1,10 @@
-"""Sessão do usuário único (cookie assinado), CSRF e token do agente."""
+"""Sessão do usuário único (cookie assinado) e CSRF."""
 
 from __future__ import annotations
 
-import hmac
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, Request, WebSocket, status
+from fastapi import Depends, HTTPException, Request, WebSocket, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from tracker.core.config import get_settings
@@ -62,15 +61,3 @@ CurrentUser = Annotated[str, Depends(current_user)]
 
 def ws_user(websocket: WebSocket) -> str | None:
     return read_session(websocket.cookies.get(SESSION_COOKIE))
-
-
-def check_agent_token(token: str | None) -> bool:
-    if not token:
-        return False
-    raw = token.removeprefix("Device ").strip()
-    return hmac.compare_digest(raw, get_settings().agent_device_token)
-
-
-async def agent_auth(authorization: Annotated[str | None, Header()] = None) -> None:
-    if not check_agent_token(authorization):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token de dispositivo inválido")

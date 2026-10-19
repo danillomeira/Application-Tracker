@@ -76,6 +76,7 @@ async def page(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
     if job is not None:
         card = await service.job_card(session, job)
         card["success_page"] = service.is_success_page(body.url, body.text)
+        card["needs_details"] = service.is_thin(job) and service.looks_like_job(body.url, body.title, body.text)
         return card
     if service.is_flow_page(body.url):
         # login/etapas da candidatura: continua na vaga de origem, sem criar vaga nova nem gastar IA
@@ -98,28 +99,40 @@ async def page(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
     }
 
 
+async def _extract_page(session: SessionDep, body: PageIn) -> JobNormalized:
+    try:
+        res = await get_ai(sessionmaker_from(session)).structured(
+            AIRequest(
+                task="job.extract",
+                system=load_prompt("job.extract"),
+                effort="low",
+                max_tokens=4000,
+                cache_ttl_days=90,
+                user=f"<job>\nURL: {service.normalize_url(body.url)}\nTítulo da página: {body.title}\n{body.text[:15000]}\n</job>",
+            ),
+            JobNormalized,
+        )
+    except AIError as exc:
+        raise HTTPException(503, f"IA indisponível: {exc}") from exc
+    return res.output
+
+
 @router.post("/analyze")
 async def analyze(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
-    """Analisa a vaga da página (uma chamada de IA, cache de 90 dias) e avalia (Chance × Atratividade)."""
+    """Analisa a vaga da página (uma chamada de IA, cache de 90 dias) e avalia (Chance × Atratividade).
+
+    Vaga já conhecida mas sem descrição (ex.: importada da lista de busca do LinkedIn) é completada com o
+    texto desta página e reavaliada."""
     job = await service.find_job(session, body.url)
     if job is None and service.is_flow_page(body.url):
         raise HTTPException(422, "esta tela é login ou etapa da candidatura, não uma vaga; abra a página da vaga")
-    if job is None:
-        try:
-            res = await get_ai(sessionmaker_from(session)).structured(
-                AIRequest(
-                    task="job.extract",
-                    system=load_prompt("job.extract"),
-                    effort="low",
-                    max_tokens=4000,
-                    cache_ttl_days=90,
-                    user=f"<job>\nURL: {service.normalize_url(body.url)}\nTítulo da página: {body.title}\n{body.text[:15000]}\n</job>",
-                ),
-                JobNormalized,
-            )
-        except AIError as exc:
-            raise HTTPException(503, f"IA indisponível: {exc}") from exc
-        x = res.output
+    if job is not None and service.is_thin(job) and len(body.text) > 400:
+        x = await _extract_page(session, body)
+        job.description_text = body.text[:20000]
+        job_service.apply_extraction(job, x)
+        await session.commit()
+    elif job is None:
+        x = await _extract_page(session, body)
         if normalize_title(x.title) in service.NO_TITLE:
             raise HTTPException(422, "não encontrei uma vaga nesta página")
         existing = await service.find_job_same_site(session, body.url, x.title)
@@ -152,6 +165,66 @@ async def analyze(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]
     return await service.job_card(session, job)
 
 
+class ListedJob(BaseModel):
+    external_id: str = Field(max_length=64)
+    title: str = Field(max_length=300)
+    company: str = Field(default="", max_length=200)
+    location: str | None = Field(default=None, max_length=200)
+    easy_apply: bool = False
+    text: str = Field(default="", max_length=3000)
+
+
+class ImportListIn(BaseModel):
+    source: str = Field(pattern="^linkedin$")
+    jobs: list[ListedJob] = Field(max_length=200)
+
+
+@router.post("/import-list")
+async def import_list(body: ImportListIn, session: SessionDep, _a: Auth) -> dict[str, int]:
+    """Vagas de uma lista de busca que VOCÊ abriu (ex.: LinkedIn): entram em Vagas e recebem nota.
+
+    Sem robô: a extensão só lê o que já está na sua tela. A descrição completa chega quando você abre a vaga."""
+    created = existing = 0
+    for item in body.jobs:
+        if not item.title.strip() or not item.company.strip():
+            continue
+        url = f"https://www.linkedin.com/jobs/view/{item.external_id}/"
+        job, is_new = await job_service.upsert_job(
+            session,
+            RawJob(
+                source="linkedin",
+                external_id=item.external_id,
+                title=item.title.strip(),
+                company_name=item.company.strip(),
+                url=url,
+                location=item.location,
+                description_text=item.text,
+                apply_url=url,
+                apply_kind="easy_apply" if item.easy_apply else "unknown",
+            ),
+        )
+        await session.commit()
+        if is_new:
+            created += 1
+            dispatch("ai.process_job", job_id=str(job.id))
+        else:
+            existing += 1
+    return {"created": created, "existing": existing}
+
+
+@router.get("/logo")
+async def logo(company_id: uuid.UUID, session: SessionDep, _a: Auth) -> Response:
+    """Logo da empresa para o painel da extensão (o mesmo cache do dashboard)."""
+    from tracker.modules.companies.logos import company_logo
+    from tracker.modules.companies.models import Company
+
+    company = await session.get(Company, company_id)
+    data = await company_logo(session, company) if company else None
+    if data is None:
+        raise HTTPException(404, "sem logo")
+    return Response(data, media_type="image/png" if data[:4] == b"\x89PNG" else "image/x-icon")
+
+
 class FieldsIn(BaseModel):
     url: str
     job_id: uuid.UUID | None = None
@@ -180,7 +253,10 @@ async def fields(body: FieldsIn, session: SessionDep, _a: Auth) -> dict[str, Any
         "suggestions": {
             k: {"value": a.value, "confidence": a.confidence} for k, a in ai.items() if k not in {r.key for r in res.values}
         },
-        "sensitive": [f.key for f in res.pending if f.key not in ai],
+        # sensível de verdade (salário, visto, dados pessoais protegidos): nunca vai para a IA, quem responde é você
+        "sensitive": [f.key for f in res.pending if f.key not in ai and profile_service.is_sensitive(f.label)],
+        # sem resposta salva: a IA pode escrever quando você pedir ("Completar com IA")
+        "open": [f.key for f in res.pending if f.key not in ai and not profile_service.is_sensitive(f.label)],
         "gaps": res.gaps,
         "job_id": str(job.id) if job else None,
     }

@@ -76,9 +76,6 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = "dev-telegram-secret"
     telegram_allowed_chat_id: int | None = None
 
-    agent_device_token: str = "dev-agent-token"
-    agent_api_url: str = "http://localhost:8000"
-    agent_profile_dir: str = "~/.tracker-agent/chromium"
     latex_cmd: str = "tectonic"
 
     backup_pg_dump_cmd: str = "pg_dump"
@@ -100,8 +97,6 @@ class Settings(BaseSettings):
                 raise ValueError("SECRET_KEY de desenvolvimento em produção")
             if self.encryption_key == "ZGV2LWluc2VjdXJlLWtleS0zMi1ieXRlcy1sb25nISE=":
                 raise ValueError("ENCRYPTION_KEY de desenvolvimento em produção")
-            if self.agent_device_token.startswith("dev-"):
-                raise ValueError("AGENT_DEVICE_TOKEN de desenvolvimento em produção")
         if len(self.encryption_key_bytes) != 32:
             raise ValueError("ENCRYPTION_KEY precisa ter 32 bytes em base64")
         return self

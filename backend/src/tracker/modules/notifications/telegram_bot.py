@@ -6,12 +6,11 @@ import asyncio
 import hmac
 import logging
 import secrets
-import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tracker.api.deps import SessionDep
@@ -19,11 +18,7 @@ from tracker.core import settings_store
 from tracker.core.config import get_settings
 from tracker.core.security import CurrentUser
 from tracker.integrations import telegram
-from tracker.modules.agent_gateway import control
-from tracker.modules.agent_gateway.models import AgentJob
-from tracker.modules.applications.models import Application, DailyQuota, PendingQuestion
 from tracker.modules.calendar.models import CalendarEvent
-from tracker.modules.platform.models import Notification
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["telegram"])
@@ -64,12 +59,6 @@ async def telegram_test(session: SessionDep, _user: CurrentUser) -> dict[str, An
     return {"message_id": mid}
 
 
-def _pending_buttons(pq: PendingQuestion) -> list[list[dict[str, str]]] | None:
-    if not pq.options or len(pq.options) > 6:
-        return None
-    return [[{"text": str(o)[:40], "callback_data": f"pq:{pq.id}:{i}"}] for i, o in enumerate(pq.options)]
-
-
 async def summary_today(session: AsyncSession) -> str:
     now = datetime.now(UTC)
     interviews = (
@@ -84,57 +73,36 @@ async def summary_today(session: AsyncSession) -> str:
             .order_by(CalendarEvent.starts_at)
         )
     ).all()
-    pending = await session.scalar(select(func.count()).select_from(PendingQuestion).where(PendingQuestion.status == "open")) or 0
-    reviews = (
-        await session.scalar(select(func.count()).select_from(Application).where(Application.status == "awaiting_review")) or 0
-    )
-    quota = await session.scalar(select(DailyQuota).where(DailyQuota.day == date.today(), DailyQuota.kind == "easy_apply"))
+    from tracker.modules.analytics.dashboard import today as today_view
+
+    data = await today_view(session, "telegram")
+    labels = {
+        "ambiguous_emails": "e-mail(s) para associar",
+        "resumes_to_approve": "CV(s) para aprovar",
+        "calendar_drafts": "evento(s) para confirmar",
+        "drafts": "rascunho(s) de e-mail",
+    }
+    pend = [f"{n} {labels[k]}" for k, n in data["pending"].items() if n and k in labels]
     lines = ["*Hoje*"]
     lines += [
         f"📅 {e.starts_at.astimezone(__import__('zoneinfo').ZoneInfo(get_settings().user_timezone)):%d/%m %H:%M} — {e.title}"
         for e in interviews
     ] or ["Sem entrevistas nas próximas 48 h"]
-    lines.append(f"❓ {pending} perguntas pendentes · ✅ {reviews} candidaturas para revisar")
-    lines.append(f"📨 Easy Apply hoje: {quota.used if quota else 0}")
+    lines.append("✅ Nada pendente" if not pend else "⏳ " + " · ".join(pend))
+    lines.append(f"📨 Candidaturas na semana: {data['stats']['applied_7d']} · respostas: {data['stats']['responses_7d']}")
     return "\n".join(lines)
 
 
 async def handle_update(session: AsyncSession, update: dict[str, Any]) -> str | None:
     """Processa um update; retorna o texto de resposta (ou None)."""
-    from tracker.modules.applications.router import PendingAnswerIn, answer_pending
-
     chat_cfg = await settings_store.get(session, "telegram_chat")
-    if cb := update.get("callback_query"):
-        chat_id = cb.get("message", {}).get("chat", {}).get("id")
-        if chat_id != await linked_chat(session):
-            return None
-        data = cb.get("data", "")
-        reply = "ok"
-        if data.startswith("pq:"):
-            _, pq_id, idx = data.split(":")
-            pq = await session.get(PendingQuestion, uuid.UUID(pq_id))
-            if pq and pq.status == "open":
-                value = pq.options[int(idx)]
-                await answer_pending(session, pq, PendingAnswerIn(value=value), actor="user")
-                reply = f"Resposta salva: {value}"
-            else:
-                reply = "Pergunta já respondida"
-        elif data.startswith("ap:"):
-            from tracker.modules.applications.router import BulkIds, approve_reviews
-
-            await approve_reviews(BulkIds(ids=[uuid.UUID(data[3:])]), session, "telegram")  # type: ignore[arg-type]
-            reply = "Candidatura aprovada"
-        elif data == "kill":
-            await control.kill(session, "user", "Telegram")
-            reply = "Agente parado"
-        await session.commit()
+    if cb := update.get("callback_query"):  # botões antigos: só confirma
         if cb.get("id"):
             try:
-                await telegram.answer_callback(cb["id"], reply)
+                await telegram.answer_callback(cb["id"], "ok")
             except Exception:  # noqa: S110
                 pass
         return None
-
     msg = update.get("message") or {}
     chat_id = msg.get("chat", {}).get("id")
     text = (msg.get("text") or "").strip()
@@ -154,55 +122,10 @@ async def handle_update(session: AsyncSession, update: dict[str, Any]) -> str | 
         return None  # código inválido: silêncio (não revela o bot)
     if chat_id != await linked_chat(session):
         return None
-    reply_to = (msg.get("reply_to_message") or {}).get("message_id")
-    if reply_to:
-        n = await session.scalar(select(Notification).where(Notification.telegram_message_id == reply_to))
-        pq_id = (n.payload or {}).get("pending_question_id") if n else None
-        if pq_id:
-            pq = await session.get(PendingQuestion, uuid.UUID(pq_id))
-            if pq and pq.status == "open":
-                await answer_pending(session, pq, PendingAnswerIn(value=text), actor="user")
-                await session.commit()
-                return "Resposta salva no banco de respostas."
     cmd = text.split()[0].lower() if text else ""
-    if cmd == "/stop":
-        n = await control.kill(session, "user", "Telegram /stop")
-        await session.commit()
-        return f"🛑 Agente parado ({n} tarefa(s) interrompida(s)). Use /retomar para liberar."
-    if cmd == "/retomar":
-        await control.resume(session, "user")
-        await session.commit()
-        return "▶️ Agente liberado."
-    if cmd in ("/hoje", "/status"):
-        txt = await summary_today(session)
-        if cmd == "/status":
-            blocked = await control.is_blocked(session)
-            running = await session.scalar(select(AgentJob).where(AgentJob.status.in_(["leased", "running"])).limit(1))
-            txt += f"\n🤖 Agente: {blocked or ('trabalhando' if running else 'ocioso')}"
-        return txt
-    if cmd == "/fila":
-        jobs = (
-            await session.scalars(
-                select(AgentJob).where(AgentJob.status == "pending").order_by(AgentJob.priority.desc()).limit(5)
-            )
-        ).all()
-        return "\n".join(f"{i + 1}. {j.kind} ({j.payload.get('job_id', '')[:8]})" for i, j in enumerate(jobs)) or "Fila vazia"
-    if cmd == "/pendentes":
-        pqs = (await session.scalars(select(PendingQuestion).where(PendingQuestion.status == "open").limit(5))).all()
-        for pq in pqs:
-            mid = await telegram.send_message(f"❓ {pq.question_text}", _pending_buttons(pq), chat_id=chat_id)
-            session.add(
-                Notification(
-                    channel="telegram",
-                    kind="pending_question",
-                    telegram_message_id=mid,
-                    payload={"pending_question_id": str(pq.id)},
-                    sent_at=datetime.now(UTC),
-                )
-            )
-        await session.commit()
-        return None if pqs else "Nenhuma pergunta pendente 🎉"
-    return "Comandos: /hoje /status /fila /pendentes /stop /retomar"
+    if cmd in ("/hoje", "/status", "/pendentes"):
+        return await summary_today(session)
+    return "Comandos: /hoje (resumo do dia) · /pendentes (o que precisa de você)"
 
 
 @router.post("/webhooks/telegram/{secret}")

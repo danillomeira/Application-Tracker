@@ -226,7 +226,40 @@ async def store_email(session: AsyncSession, email: ParsedEmail, reason: str | N
     return row
 
 
+async def ingest_linkedin_alert(session: AsyncSession, email: ParsedEmail) -> EmailMessage | None:
+    """Alerta de vagas do LinkedIn: cada vaga do e-mail vira uma vaga em "Vagas" (sem IA para classificar)."""
+    from tracker.core.tasks import dispatch
+    from tracker.modules.inbox.linkedin_alerts import parse_alert
+    from tracker.modules.jobs import service as job_service
+    from tracker.modules.jobs.normalize import RawJob
+
+    row = await store_email(session, email, "linkedin_alert")
+    if row is None:
+        return None
+    jobs = parse_alert(email)
+    created = 0
+    for a in jobs:
+        url = f"https://www.linkedin.com/jobs/view/{a.external_id}/"
+        job, is_new = await job_service.upsert_job(
+            session,
+            RawJob(source="linkedin", external_id=a.external_id, title=a.title, company_name=a.company, url=url,
+                   location=a.location, apply_url=url, apply_kind="easy_apply" if a.easy_apply else "unknown"),
+        )  # fmt: skip
+        await session.flush()
+        if is_new:
+            created += 1
+            dispatch("ai.process_job", job_id=str(job.id))
+    row.classification, row.classification_confidence, row.link_status = "notificacao_linkedin", 1.0, "none"
+    row.extracted = {**(row.extracted or {}), "summary": f"Alerta do LinkedIn: {len(jobs)} vaga(s), {created} nova(s)"}
+    row.processed_at = datetime.now(UTC)
+    return row
+
+
 async def process_email(session: AsyncSession, ai: AIClient, email: ParsedEmail) -> EmailMessage | None:
+    from tracker.modules.inbox.linkedin_alerts import is_linkedin_alert
+
+    if is_linkedin_alert(email):
+        return await ingest_linkedin_alert(session, email)
     companies = (await session.scalars(select(Company))).all()
     domains = {d for c in companies for d in (c.domains or [])}
     names = {c.normalized_name for c in companies}
@@ -256,10 +289,6 @@ async def process_email(session: AsyncSession, ai: AIClient, email: ParsedEmail)
         await inbound_opportunity(session, row, result)
     elif result.label == "notificacao_linkedin":
         row.link_status = "none"
-        if await settings_store.flag(session, "linkedin_agent"):
-            from tracker.modules.agent_gateway.service import enqueue_agent_job
-
-            await enqueue_agent_job(session, "read_messages", {"email_id": str(row.id)}, priority=50)
     else:
         row.link_status = "ambiguous"
         await notify(

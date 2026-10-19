@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from sqlalchemy import and_, select
 
 from tracker.api.deps import SessionDep, get_or_404
-from tracker.core import audit, events
 from tracker.core.security import CurrentUser
 from tracker.core.tasks import dispatch
-from tracker.modules.agent_gateway.models import AgentJob
 from tracker.modules.applications import service, state_machine
 from tracker.modules.applications.models import (
     Application,
@@ -40,13 +36,10 @@ from tracker.modules.jobs import service as job_service
 from tracker.modules.jobs.models import Job
 from tracker.modules.jobs.normalize import RawJob
 from tracker.modules.people.models import Person, PersonApplication
-from tracker.modules.profile import service as profile_service
-from tracker.modules.profile.models import AnswerBankEntry
 from tracker.modules.resumes import service as resume_service
 from tracker.modules.scoring.models import JobScore
 
 router = APIRouter(prefix="/applications", tags=["applications"])
-review_router = APIRouter(tags=["applications"])
 
 
 def _base_stmt():
@@ -223,7 +216,7 @@ async def prepare(app_id: uuid.UUID, session: SessionDep, _user: CurrentUser) ->
 
 @router.post("/{app_id}/submitted", response_model=ApplicationOut)
 async def mark_submitted(app_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> ApplicationOut:
-    """Botão "enviei" para candidaturas feitas fora do agente (RF-EXT-04)."""
+    """Botão "Já me candidatei" (RF-EXT-04)."""
     app = await get_or_404(session, Application, app_id)
     await service.register_submission(session, app, actor="user", channel=None)
     await session.commit()
@@ -269,126 +262,3 @@ async def manual(body: ManualApplicationIn, session: SessionDep, _user: CurrentU
     row = (await session.execute(_base_stmt().where(Application.id == app.id))).first()
     assert row is not None
     return _out(*row)
-
-
-# ---------- Fila de revisão e pendências ----------
-@review_router.get("/review-queue", response_model=list[ApplicationOut])
-async def review_queue(session: SessionDep, _user: CurrentUser) -> list[ApplicationOut]:
-    rows = (
-        await session.execute(
-            _base_stmt().where(Application.status == "awaiting_review").order_by(Application.queue_priority.desc())
-        )
-    ).all()
-    return [_out(*r) for r in rows]
-
-
-class BulkIds(BaseModel):
-    ids: list[uuid.UUID]
-
-
-@review_router.post("/review-queue/approve")
-async def approve_reviews(body: BulkIds, session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
-    approved = []
-    for app_id in body.ids:
-        app = await session.get(Application, app_id)
-        if app is None or app.status != "awaiting_review":
-            continue
-        job = await session.scalar(select(AgentJob).where(AgentJob.application_id == app.id, AgentJob.status == "paused"))
-        if job is not None:
-            job.state = {**(job.state or {}), "review_approved": True}
-            job.status = "pending"
-        await service.add_event(session, app, "review_approved", actor="user")
-        await audit.record(
-            session, actor="user", action="application.review_approved", entity_type="application", entity_id=app.id
-        )
-        approved.append(str(app.id))
-    await session.commit()
-    await events.apublish("agent", "agent.review_approved", {"ids": approved})
-    return {"approved": approved}
-
-
-class PendingOut(BaseModel):
-    id: uuid.UUID
-    application_id: uuid.UUID
-    question_text: str
-    field_kind: str
-    options: list[Any]
-    context: dict[str, Any]
-    ai_suggestion: dict[str, Any] | None
-    status: str
-    created_at: datetime
-    expires_at: datetime | None
-    company_name: str | None = None
-    job_title: str | None = None
-
-
-@review_router.get("/pending-questions", response_model=list[PendingOut])
-async def pending_questions(session: SessionDep, _user: CurrentUser, status: str = "open") -> list[PendingOut]:
-    rows = (
-        await session.execute(
-            select(PendingQuestion, Job, Company)
-            .join(Application, Application.id == PendingQuestion.application_id)
-            .join(Job, Job.id == Application.job_id)
-            .join(Company, Company.id == Job.company_id)
-            .where(PendingQuestion.status == status)
-            .order_by(PendingQuestion.created_at)
-        )
-    ).all()
-    out = []
-    for pq, job, comp in rows:
-        o = PendingOut.model_validate(pq, from_attributes=True)
-        o.company_name, o.job_title = comp.name, job.title
-        out.append(o)
-    return out
-
-
-class PendingAnswerIn(BaseModel):
-    value: Any
-    save_to_bank: bool = True
-    scope: str = "any"  # any | pt | en
-
-
-async def answer_pending(session: SessionDep, pq: PendingQuestion, body: PendingAnswerIn, actor: str = "user") -> None:
-    if pq.status != "open":
-        raise HTTPException(409, "pergunta já respondida")
-    pq.status = "answered"
-    pq.answered_value = {"value": body.value}
-    pq.save_to_bank = body.save_to_bank
-    if body.save_to_bank:
-        await profile_service.upsert_answer(
-            session,
-            AnswerBankEntry(
-                canonical_question=pq.question_text,
-                field_kind=pq.field_kind,
-                answer={"value": body.value},
-                language=body.scope,
-                source="user",
-                sensitive=profile_service.is_sensitive(pq.question_text),
-            ),
-        )
-    app = await session.get(Application, pq.application_id)
-    assert app is not None
-    job = await session.scalar(select(AgentJob).where(AgentJob.application_id == app.id, AgentJob.status == "paused"))
-    if job is not None:
-        answers = dict((job.state or {}).get("user_answers") or {})
-        answers[pq.question_text] = body.value
-        job.state = {**(job.state or {}), "user_answers": answers}
-        job.status = "pending"
-        job.priority = max(job.priority, 1000.0)  # volta com prioridade
-    open_left = await session.scalar(
-        select(PendingQuestion.id).where(
-            PendingQuestion.application_id == app.id, PendingQuestion.status == "open", PendingQuestion.id != pq.id
-        )
-    )
-    if app.status == "needs_input" and not open_left:
-        await service.transition(session, app, "queued", actor=actor, reason="pergunta respondida")
-    await service.add_event(session, app, "question_answered", {"question": pq.question_text}, actor=actor)
-
-
-@review_router.post("/pending-questions/{pq_id}/answer")
-async def post_answer(pq_id: uuid.UUID, body: PendingAnswerIn, session: SessionDep, _user: CurrentUser) -> dict[str, str]:
-    pq = await get_or_404(session, PendingQuestion, pq_id)
-    await answer_pending(session, pq, body)
-    await session.commit()
-    await events.apublish("applications", "pending_question.answered", {"id": str(pq_id)})
-    return {"status": "answered"}

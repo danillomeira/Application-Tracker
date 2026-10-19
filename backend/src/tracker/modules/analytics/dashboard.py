@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
 from sqlalchemy import and_, func, select
 
 from tracker.api.deps import SessionDep
-from tracker.core import settings_store
 from tracker.core.security import CurrentUser
-from tracker.modules.agent_gateway.models import AgentJob
-from tracker.modules.applications.models import Application, DailyQuota, PendingQuestion
+from tracker.modules.applications.models import Application
 from tracker.modules.calendar.models import CalendarEvent
 from tracker.modules.companies.models import Company
 from tracker.modules.inbox.models import Draft, EmailMessage
 from tracker.modules.jobs.models import Job
-from tracker.modules.platform.models import BrowserSessionMeta, IntegrationState
+from tracker.modules.platform.models import IntegrationState
 from tracker.modules.profile.models import MasterProfileVersion
 from tracker.modules.resumes.models import ResumeVariant
 from tracker.modules.scoring.models import JobScore
@@ -63,8 +61,6 @@ async def today(session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
         return int(await session.scalar(stmt) or 0)
 
     pending = {
-        "questions": await count(select(func.count()).select_from(PendingQuestion).where(PendingQuestion.status == "open")),
-        "reviews": await count(select(func.count()).select_from(Application).where(Application.status == "awaiting_review")),
         "ambiguous_emails": await count(
             select(func.count()).select_from(EmailMessage).where(EmailMessage.link_status == "ambiguous")
         ),
@@ -96,11 +92,6 @@ async def today(session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
             .limit(8)
         )
     ).all()
-    limits = await settings_store.get(session, "limits")
-    quota = await session.scalar(select(DailyQuota).where(DailyQuota.day == date.today(), DailyQuota.kind == "easy_apply"))
-    agent_running = await session.scalar(select(AgentJob).where(AgentJob.status.in_(["leased", "running"])).limit(1))
-    agent_meta = await session.scalar(select(BrowserSessionMeta).where(BrowserSessionMeta.site == "linkedin"))
-    queued = await count(select(func.count()).select_from(AgentJob).where(AgentJob.status == "pending"))
     week_ago = now - timedelta(days=7)
     stats = {
         "applied_7d": await count(select(func.count()).select_from(Application).where(Application.submitted_at >= week_ago)),
@@ -166,15 +157,6 @@ async def today(session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
             }
             for j, c, s in top_jobs
         ],
-        "quota": {"used": quota.used if quota else 0, "limit": limits["easy_apply_per_day"]},
-        "agent": {
-            "running": agent_running is not None,
-            "queued": queued,
-            "paused_until": agent_meta.paused_until.isoformat() if agent_meta and agent_meta.paused_until else None,
-            "last_safety_stop_at": agent_meta.last_safety_stop_at.isoformat()
-            if agent_meta and agent_meta.last_safety_stop_at
-            else None,
-        },
         "stats": stats,
         "integration_errors": [{"name": i.name, "error": i.last_error} for i in integrations],
     }

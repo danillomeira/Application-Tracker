@@ -1,5 +1,6 @@
 // Service worker: única peça que fala com a API (token fica aqui, nunca na página).
-const DEFAULTS = { apiUrl: "http://localhost:8000", token: "", enabled: true, ignoredDomains: ["mail.google.com", "web.whatsapp.com", "localhost:3100"] };
+const DEFAULTS = { apiUrl: "http://localhost:8000", token: "", enabled: true, autoFill: true, ignoredDomains: ["mail.google.com", "web.whatsapp.com", "localhost:3100"] };
+const logos = new Map(); // cache por empresa durante a sessão do navegador
 
 async function config() {
   const c = await chrome.storage.sync.get(DEFAULTS);
@@ -29,6 +30,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       if (msg.type === "api") {
         const res = await api(msg.method, msg.path, msg.body);
         return reply({ ok: true, data: await res.json() });
+      }
+      if (msg.type === "logo") {
+        if (logos.has(msg.companyId)) return reply({ ok: true, data: logos.get(msg.companyId) });
+        const res = await api("GET", `/logo?company_id=${encodeURIComponent(msg.companyId)}`);
+        const buf = new Uint8Array(await res.arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+        const url = `data:${res.headers.get("content-type") || "image/png"};base64,${btoa(bin)}`;
+        logos.set(msg.companyId, url);
+        return reply({ ok: true, data: url });
       }
       if (msg.type === "resume") {
         const res = await api("GET", `/resume${msg.jobId ? `?job_id=${msg.jobId}` : ""}`);

@@ -1,10 +1,17 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><style>body{font-family:system-ui,sans-serif;width:260px;padding:10px;margin:0}button{width:100%;margin-top:6px;padding:7px;border:0;border-radius:6px;background:#1d4ed8;color:#fff;cursor:pointer}button.sec{background:#e2e8f0;color:#0f172a}p{font-size:12px;color:#555}</style></head>
+<html lang="pt-BR"><head><meta charset="utf-8"><style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,"Segoe UI",sans-serif;width:270px;padding:14px;margin:0;color:#0f172a;letter-spacing:-.01em}
+  .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px}.brand{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#2563eb,#0ea5e9)}
+  b{font-size:14px}p{font-size:12px;color:#526075;margin:2px 0 10px}
+  button{width:100%;margin-top:6px;padding:9px;border:0;border-radius:10px;background:#2563eb;color:#fff;cursor:pointer;font:600 12px inherit;font-family:inherit;text-align:left}
+  button.sec{background:#eef1f6;color:#0f172a}
+</style></head>
 <body>
-<b>Application Tracker</b>
+<div class="hd"><span class="brand"></span><b>Application Tracker</b></div>
 <p id="st">…</p>
-<button id="panel">Mostrar painel nesta página</button>
-<button id="fill" class="sec">Preencher formulário</button>
+<button id="panel">Mostrar o assistente nesta página</button>
+<button id="fill" class="sec">Preencher formulário de novo</button>
+<button id="ai" class="sec">✨ Completar com IA</button>
 <button id="opts" class="sec">Opções</button>
 <script src="popup.js"></script>
 </body></html>

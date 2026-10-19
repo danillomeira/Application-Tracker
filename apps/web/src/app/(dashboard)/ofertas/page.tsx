@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import { Wallet } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, Modal, PageHeader, Select } from "@/components/ui";
@@ -90,7 +91,7 @@ function CurrentJob({ cfg, annual }: { cfg: CurrentCfg; annual: Annual | null })
   return (
     <Card className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <CardTitle className="mb-0">Meu emprego atual {f.company ? `(${f.company})` : ""}: base de comparação</CardTitle>
+        <CardTitle className="mb-0 flex items-center gap-2">{f.company && <CompanyLogo name={f.company} className="h-8 w-8" />}Meu emprego atual {f.company ? `(${f.company})` : ""}: base de comparação</CardTitle>
         {annual && (
           <div className="flex flex-wrap gap-3 text-sm">
             <span>Cai na conta: <b>{money(annual.take_home_monthly)}</b>/mês</span>
@@ -130,7 +131,7 @@ function OfferCard({ o, best, base }: { o: Offer; best: boolean; base: number | 
   return (
     <Card className="space-y-2 text-sm">
       <div className="flex items-center justify-between">
-        <p className="font-semibold">{o.company_name} {best && <Badge tone="success">melhor anual líquido</Badge>}</p>
+        <p className="flex items-center gap-2 font-semibold"><CompanyLogo name={o.company_name} className="h-8 w-8" /> {o.company_name} {best && <Badge tone="success">melhor anual líquido</Badge>}</p>
         <Badge>{o.regime} · {o.status}</Badge>
       </div>
       <p>{money(o.base_salary, o.currency)} / {o.period === "year" ? "ano" : "mês"} · {o.work_model ?? "modelo n/d"}</p>

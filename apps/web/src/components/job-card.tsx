@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, ExternalLink, MapPin, ThumbsDown, ThumbsUp, X } from "lucide-react";
-import Link from "next/link";
-import { Avatar, Badge, Button, Card, ScoreRing } from "@/components/ui";
+import { Archive, ArrowRight, Ban, BarChart3, Check, Flame, Laptop, Layers, MapPin, Target, Wallet, X } from "lucide-react";
+import { CompanyLogo, TechIcons, Tooltip } from "@/components/brand";
+import { Card } from "@/components/ui";
 import { useSend } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE, SENIORITY_LABEL, STATUS_LABEL, WORK_MODEL_LABEL } from "@/lib/labels";
 import { cn, relativeTime } from "@/lib/utils";
@@ -56,124 +56,84 @@ export function formatSalary(s: JobRow["salary"]): string | null {
   return `${range}${PERIOD[s.period ?? "month"] ?? ""}`;
 }
 
-/** Cartão de avaliação da vaga (docs/10 §7). */
-export function JobCard({ job, onTech }: { job: JobRow; onTech?: (tech: string) => void }) {
-  const inv = { invalidate: [["jobs"], ["dashboard"], ["facets"]] };
-  const approve = useSend("POST", `/api/v1/jobs/${job.id}/approve`, { success: "Aprovada: preparando candidatura", ...inv });
-  const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, { success: "Descartada", ...inv });
-  const fb = useSend<{ verdict: string }>("POST", `/api/v1/jobs/${job.id}/feedback`, { success: "Obrigado: isso ajusta as notas" });
+const QUADRANT_ICON: Record<string, React.ComponentType<{ size?: number }>> = { top: Flame, bet: Target, volume: Layers, discard: Archive, blocked: Ban };
+
+/** Cartão enxuto da vaga: o essencial com ícones. Clicar abre o painel com detalhes e o próximo passo. */
+export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: JobRow) => void; onTech?: (tech: string) => void }) {
+  const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, { success: "Vaga descartada", invalidate: [["jobs"], ["dashboard"], ["facets"]] });
   const s = job.score;
-  const reasons = [...(s?.explanation.chance?.positives ?? []), ...(s?.explanation.attractiveness?.positives ?? [])].slice(0, 2);
-  const negatives = [
-    ...(s?.explanation.knockout ?? []),
-    ...(s?.explanation.chance?.negatives ?? []),
-    ...(s?.explanation.attractiveness?.negatives ?? []),
-  ].slice(0, 2);
   const salary = formatSalary(job.salary);
-  const techs = (job.requirements?.must ?? []).filter((t) => t.length <= 24).slice(0, 5);
-  const link = job.apply_url || job.canonical_url;
+  const QIcon = s ? QUADRANT_ICON[s.quadrant] ?? Target : null;
+  const applied = job.application_status && !["discovered", "queued", "skipped", "blocked"].includes(job.application_status);
+  const open = () => onOpen?.(job);
   return (
-    <Card interactive className="group flex h-full flex-col gap-3">
+    <Card
+      interactive
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open())}
+      className="group flex h-full cursor-pointer flex-col gap-3"
+      aria-label={`${job.title} na ${job.company_name}. Abrir detalhes`}
+    >
       <div className="flex items-start gap-3">
-        <Avatar name={job.company_name} />
+        <CompanyLogo id={job.company_id} name={job.company_name} />
         <div className="min-w-0 flex-1">
-          <Link href={`/vagas/${job.id}`} className="line-clamp-2 font-semibold leading-snug tracking-tight hover:text-primary">
-            {job.title}
-          </Link>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground/80">{job.company_name}</span>
-            {job.location && (
-              <span className="inline-flex items-center gap-0.5">
-                · <MapPin size={11} /> {job.location}
-              </span>
-            )}
-            <span>· {relativeTime(job.posted_at ?? job.first_seen_at)}</span>
+          <p className="line-clamp-2 font-semibold leading-snug tracking-tight group-hover:text-primary">{job.title}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {job.company_name} · {relativeTime(job.posted_at ?? job.first_seen_at)}
           </p>
         </div>
         {s && (
-          <div className="flex shrink-0 gap-2">
-            <ScoreRing value={s.chance} label="Chance" size={42} />
-            <ScoreRing value={s.attractiveness} label="Atrat." size={42} />
-          </div>
+          <Tooltip label={`Match ${Math.round(s.priority)} · ${QUADRANT_LABEL[s.quadrant]}. Combina chance de ser chamado e quanto a vaga vale a pena.`}>
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold",
+                { success: "bg-success/12 text-success", primary: "bg-accent text-primary", warning: "bg-warning/12 text-warning", danger: "bg-danger/12 text-danger", neutral: "bg-muted text-muted-foreground" }[QUADRANT_TONE[s.quadrant] ?? "neutral"],
+              )}
+            >
+              {QIcon && <QIcon size={13} />} {Math.round(s.priority)}
+            </span>
+          </Tooltip>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {s && <Badge tone={QUADRANT_TONE[s.quadrant]}>{QUADRANT_LABEL[s.quadrant]}</Badge>}
-        {job.work_model && <Badge>{WORK_MODEL_LABEL[job.work_model] ?? job.work_model}</Badge>}
-        {job.regime && <Badge>{job.regime}</Badge>}
-        {job.seniority && <Badge>{SENIORITY_LABEL[job.seniority] ?? job.seniority}</Badge>}
-        {job.apply_kind === "easy_apply" && <Badge tone="primary">Easy Apply</Badge>}
-        {salary && <Badge tone="success">{salary}</Badge>}
-        {job.application_status && job.application_status !== "discovered" && <Badge tone="primary">{STATUS_LABEL[job.application_status]}</Badge>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {job.location && <span className="inline-flex max-w-44 items-center gap-1 truncate"><MapPin size={13} className="shrink-0" /> {job.location}</span>}
+        {job.work_model && <span className="inline-flex items-center gap-1"><Laptop size={13} /> {WORK_MODEL_LABEL[job.work_model] ?? job.work_model}</span>}
+        {job.seniority && <span className="inline-flex items-center gap-1"><BarChart3 size={13} /> {SENIORITY_LABEL[job.seniority] ?? job.seniority}</span>}
+        {salary && <span className="inline-flex items-center gap-1 font-medium text-success"><Wallet size={13} /> {salary}</span>}
       </div>
 
-      {techs.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {techs.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onTech?.(t)}
-              title={onTech ? `Filtrar por ${t}` : t}
-              className={cn(
-                "rounded-md border border-dashed px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors",
-                onTech && "hover:border-primary hover:text-primary",
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
+      <div onClick={(e) => onTech && e.stopPropagation()}>
+        <TechIcons techs={job.requirements?.must ?? []} max={7} />
+      </div>
 
-      {s ? (
-        <ul className="space-y-0.5 text-xs">
-          {reasons.map((r) => (
-            <li key={r} className="flex gap-1.5 text-success">
-              <Check size={13} className="mt-0.5 shrink-0" /> <span className="line-clamp-1">{r}</span>
-            </li>
-          ))}
-          {negatives.map((r) => (
-            <li key={r} className="flex gap-1.5 text-danger">
-              <X size={13} className="mt-0.5 shrink-0" /> <span className="line-clamp-1">{r}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-xs text-muted-foreground">Avaliando…</p>
-      )}
-
-      <div className="mt-auto flex items-center gap-1.5 border-t pt-3">
-        <Button size="sm" onClick={() => approve.mutate(undefined)} disabled={approve.isPending || s?.quadrant === "blocked"}>
-          <Check size={14} /> Aprovar
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => skip.mutate(undefined)}>
-          Descartar
-        </Button>
+      <div className="mt-auto flex items-center gap-2 border-t pt-3">
+        {applied ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
+            <Check size={14} /> {STATUS_LABEL[job.application_status!]}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+            Ver detalhes e candidatar <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+          </span>
+        )}
         <div className="flex-1" />
-        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => fb.mutate({ verdict: "good" })} aria-label="Gostei desta vaga">
-          <ThumbsUp size={14} />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8"
-          onClick={() => fb.mutate({ verdict: "not_interested" })}
-          aria-label="Não me interessa"
-        >
-          <ThumbsDown size={14} />
-        </Button>
-        {link && (
-          <a
-            href={link}
-            target="_blank"
-            rel="noreferrer"
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Abrir anúncio original"
-          >
-            <ExternalLink size={14} />
-          </a>
+        {!applied && job.triage !== "skipped" && (
+          <Tooltip label="Não tenho interesse (some da lista)">
+            <button
+              type="button"
+              aria-label="Não tenho interesse"
+              onClick={(e) => {
+                e.stopPropagation();
+                skip.mutate(undefined);
+              }}
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+            >
+              <X size={15} />
+            </button>
+          </Tooltip>
         )}
       </div>
     </Card>

@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import Link from "next/link";
 import { use, useState } from "react";
 import { Badge, Button, Card, CardTitle, Modal, PageHeader, Select, Skeleton, Textarea } from "@/components/ui";
@@ -15,6 +16,7 @@ type Detail = {
   mode: string;
   job_title: string;
   company_name: string;
+  company_id?: string | null;
   apply_kind: string | null;
   ats_kind: string | null;
   submitted_at: string | null;
@@ -89,6 +91,7 @@ export default function ApplicationPage({ params }: { params: Promise<{ id: stri
   return (
     <div className="space-y-4">
       <PageHeader
+        media={<CompanyLogo id={app.company_id} name={app.company_name} className="h-12 w-12" />}
         title={`${app.job_title} · ${app.company_name}`}
         description={`Canal: ${app.channel} · modo ${app.mode}${app.submitted_at ? ` · enviada em ${formatDateTime(app.submitted_at)}` : ""}`}
         actions={

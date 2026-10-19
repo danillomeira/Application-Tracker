@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import { Mic } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -30,9 +31,15 @@ function List({ upcoming }: { upcoming: boolean }) {
     <div className="grid gap-3 md:grid-cols-2">
       {data.map((i) => (
         <Link key={i.id} href={`/entrevistas/${i.id}`}>
-          <Card className="hover:border-primary">
-            <p className="font-medium">{i.company_name} · {i.job_title}</p>
-            <p className="text-sm text-muted-foreground">{i.round}ª etapa · {INTERVIEW_KIND[i.kind] ?? i.kind} · {formatDateTime(i.starts_at)}</p>
+          <Card interactive>
+            <div className="flex items-center gap-3">
+              <CompanyLogo name={i.company_name} />
+              <div className="min-w-0">
+                <p className="truncate font-medium">{i.job_title}</p>
+                <p className="truncate text-xs text-muted-foreground">{i.company_name}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">{i.round}ª etapa · {INTERVIEW_KIND[i.kind] ?? i.kind} · {formatDateTime(i.starts_at)}</p>
             <div className="mt-2 flex gap-1">
               <Badge tone={i.dossier_status === "ready" ? "success" : "warning"}>dossiê {i.dossier_status ?? "pendente"}</Badge>
               {i.self_rating && <Badge>nota {i.self_rating}/5</Badge>}

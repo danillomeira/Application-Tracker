@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/inter";
 import "./globals.css";
 import { THEME_SCRIPT } from "@/components/theme-toggle";
 import { Providers } from "./providers";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#4f46e5",
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

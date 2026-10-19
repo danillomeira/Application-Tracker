@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import { useQuery as useRQ, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
@@ -56,6 +57,7 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
   return (
     <div className="space-y-4">
       <PageHeader
+        media={<CompanyLogo name={data.company_name} className="h-12 w-12" />}
         title={`${data.company_name} · ${data.job_title}`}
         description={`${data.round}ª etapa · ${INTERVIEW_KIND[data.kind] ?? data.kind} · ${formatDateTime(data.starts_at)}`}
         actions={

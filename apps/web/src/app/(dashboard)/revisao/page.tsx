@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import { MessageSquareText } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -80,6 +81,7 @@ function ReviewQueue() {
                 checked={selected.has(a.id)}
                 onChange={(e) => { const s = new Set(selected); if (e.target.checked) s.add(a.id); else s.delete(a.id); setSelected(s); }}
               />
+              <CompanyLogo name={a.company_name} className="h-9 w-9" />
               <div className="flex-1">
                 <Link href={`/candidaturas/${a.id}`} className="font-medium hover:underline">{a.job_title} · {a.company_name}</Link>
                 <p className="text-xs text-muted-foreground">{a.next_action ?? "aguardando sua aprovação"} · {relativeTime(a.last_activity_at)}</p>
@@ -117,7 +119,10 @@ function PendingItem({ p }: { p: Pending }) {
   });
   return (
     <div className="rounded-md border p-3 text-sm">
-      <p className="text-xs text-muted-foreground">{p.company_name} · {p.job_title}{p.expires_at ? ` · expira ${formatDateTime(p.expires_at)}` : ""}</p>
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <CompanyLogo name={p.company_name} className="h-6 w-6 rounded-md p-0.5 text-[9px]" />
+        {p.company_name} · {p.job_title}{p.expires_at ? ` · expira ${formatDateTime(p.expires_at)}` : ""}
+      </p>
       <p className="font-medium">{p.question_text}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {p.options.length > 0 ? (

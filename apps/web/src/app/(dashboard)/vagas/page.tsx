@@ -1,10 +1,12 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import { Briefcase, Search, SlidersHorizontal } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { JobCard, type JobRow } from "@/components/job-card";
+import { JobDrawer } from "@/components/job-drawer";
 import {
   Badge,
   Button,
@@ -46,9 +48,11 @@ export default function JobsPage() {
         icon={<Briefcase size={20} />}
         title="Vagas"
         description="Ordenadas por prioridade (Chance × Atratividade). Filtre por tecnologia, empresa, salário e mais."
-        actions={<ImportButton />}
+        actions={<span data-tour="import"><ImportButton /></span>}
       />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "vagas", label: "Vagas" }, { value: "empresas", label: "Empresas monitoradas" }, { value: "buscas", label: "Buscas salvas" }]} />
+      <div data-tour="tabs" className="inline-block">
+        <Tabs value={tab} onChange={setTab} items={[{ value: "vagas", label: "Vagas" }, { value: "empresas", label: "Empresas monitoradas" }, { value: "buscas", label: "Buscas salvas" }]} />
+      </div>
       {tab === "vagas" && (
         <Suspense fallback={<Skeleton className="h-96" />}>
           <JobsList />
@@ -78,6 +82,7 @@ function JobsList() {
   const [f, setF] = useState<Filters>(() => fromParams(new URLSearchParams(sp.toString())));
   const [limit, setLimit] = useState(PAGE);
   const [drawer, setDrawer] = useState(false);
+  const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const debounced = useDebounced(f);
   useEffect(() => {
     const qs = toParams(debounced).toString();
@@ -94,8 +99,8 @@ function JobsList() {
   const panel = <FilterPanel f={f} set={set} facets={facets} />;
   return (
     <div className="grid gap-6 lg:grid-cols-[290px_minmax(0,1fr)]">
-      <aside className="hidden lg:block">
-        <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border bg-card px-4 py-1 shadow-[var(--shadow-soft)]">
+      <aside className="hidden lg:block" data-tour="filters">
+        <div className="sticky top-[4.5rem] max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain rounded-xl border bg-card px-4 py-1 shadow-[var(--shadow-soft)] [scrollbar-width:none] hover:[scrollbar-width:thin]">
           <div className="flex items-center justify-between border-b py-3">
             <p className="flex items-center gap-2 text-sm font-semibold">
               <SlidersHorizontal size={15} /> Filtros
@@ -111,31 +116,33 @@ function JobsList() {
       </aside>
 
       <div className="min-w-0 space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-56 flex-1">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar por título, empresa ou descrição" value={f.q} onChange={(e) => set({ q: e.target.value })} className="h-10 pl-9" />
+        <div className="sticky top-14 z-20 -mx-2 space-y-2 rounded-b-xl bg-background/85 px-2 pb-3 pt-2 backdrop-blur-md">
+        <div className="flex flex-wrap items-center gap-2" data-tour="search">
+            <div className="relative min-w-56 flex-1">
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar por título, empresa ou descrição" value={f.q} onChange={(e) => set({ q: e.target.value })} className="h-10 pl-9" />
+            </div>
+            <Button variant="outline" className="h-10 lg:hidden" onClick={() => setDrawer(true)}>
+              <SlidersHorizontal size={15} /> Filtros {n > 0 && <Badge tone="primary">{n}</Badge>}
+            </Button>
+            <Select value={f.triage} onChange={(e) => set({ triage: e.target.value })} className="h-10 w-36" aria-label="Triagem">
+              <option value="new">Novas</option>
+              <option value="approved">Aprovadas</option>
+              <option value="skipped">Descartadas</option>
+              <option value="">Todas</option>
+            </Select>
+            <Select value={f.sort} onChange={(e) => set({ sort: e.target.value })} className="h-10 w-44" aria-label="Ordenar por">
+              <option value="priority">Prioridade</option>
+              <option value="recent">Mais recentes</option>
+              <option value="chance">Chance</option>
+              <option value="attractiveness">Atratividade</option>
+              <option value="salary">Maior salário</option>
+              <option value="company">Empresa (A–Z)</option>
+            </Select>
           </div>
-          <Button variant="outline" className="h-10 lg:hidden" onClick={() => setDrawer(true)}>
-            <SlidersHorizontal size={15} /> Filtros {n > 0 && <Badge tone="primary">{n}</Badge>}
-          </Button>
-          <Select value={f.triage} onChange={(e) => set({ triage: e.target.value })} className="h-10 w-auto" aria-label="Triagem">
-            <option value="new">Novas</option>
-            <option value="approved">Aprovadas</option>
-            <option value="skipped">Descartadas</option>
-            <option value="">Todas</option>
-          </Select>
-          <Select value={f.sort} onChange={(e) => set({ sort: e.target.value })} className="h-10 w-auto" aria-label="Ordenar por">
-            <option value="priority">Prioridade</option>
-            <option value="recent">Mais recentes</option>
-            <option value="chance">Chance</option>
-            <option value="attractiveness">Atratividade</option>
-            <option value="salary">Maior salário</option>
-            <option value="company">Empresa (A–Z)</option>
-          </Select>
-        </div>
 
-        <ActiveFilters f={f} set={set} facets={facets} onClear={() => setF({ ...EMPTY })} />
+          <ActiveFilters f={f} set={set} facets={facets} onClear={() => setF({ ...EMPTY })} />
+        </div>
 
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
@@ -165,10 +172,10 @@ function JobsList() {
           </EmptyState>
         ) : (
           <>
-            <Stagger key={apiQs.toString()} className="grid gap-4 xl:grid-cols-2">
-              {jobs.map((j) => (
-                <StaggerItem key={j.id}>
-                  <JobCard job={j} onTech={(t) => !f.tech.includes(t) && set({ tech: [...f.tech, t] })} />
+            <Stagger key={apiQs.toString()} className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3">
+              {jobs.map((j, idx) => (
+                <StaggerItem key={j.id} data-tour={idx === 0 ? "job-card" : undefined}>
+                  <JobCard job={j} onOpen={setOpenJob} />
                 </StaggerItem>
               ))}
             </Stagger>
@@ -183,6 +190,7 @@ function JobsList() {
         )}
       </div>
 
+      <JobDrawer job={openJob} onClose={() => setOpenJob(null)} />
       <AnimatePresence>
         {drawer && (
           <>
@@ -290,7 +298,7 @@ function Companies() {
           <tbody>
             {data?.map((c) => (
               <tr key={c.id} className="border-t">
-                <td className="p-2">{c.name}</td>
+                <td className="p-2"><span className="flex items-center gap-2.5"><CompanyLogo id={c.id} name={c.name} className="h-8 w-8" /> {c.name}</span></td>
                 <td>{c.ats_kind ? `${c.ats_kind}/${c.ats_board_token}` : "—"}</td>
                 {(["is_monitored", "is_watchlisted", "is_blocked"] as const).map((k) => (
                   <td key={k}>

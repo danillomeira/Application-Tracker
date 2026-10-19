@@ -2,501 +2,601 @@
 # Empresas sem board público detectado ficam em `no_public_board` (use a extensão ao navegar no site delas).
 companies:
 - name: Nubank
+  domain: nubank.com.br
   region: BR
   ats_kind: ashby
   ats_board_token: nubank
   open_jobs_at_discovery: 100
 - name: iFood
+  domain: ifood.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: ifoodcarreiras
   open_jobs_at_discovery: 62
 - name: Itaú Unibanco
+  domain: itau.com.br
   region: BR
   ats_kind: smartrecruiters
   ats_board_token: itauunibanco
   open_jobs_at_discovery: 136
 - name: XP Inc.
+  domain: xpi.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: xpinc
   open_jobs_at_discovery: 145
 - name: BTG Pactual
+  domain: btgpactual.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: btgpactual
   open_jobs_at_discovery: 272
 - name: Stone
+  domain: stone.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: stone
   open_jobs_at_discovery: 370
 - name: PagBank
+  domain: pagbank.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: pagseguro
   open_jobs_at_discovery: 812
 - name: Banco Inter
+  domain: inter.co
   region: BR
   ats_kind: greenhouse
   ats_board_token: inter
   open_jobs_at_discovery: 161
 - name: C6 Bank
+  domain: c6bank.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: c6bank
   open_jobs_at_discovery: 156
 - name: Neon
+  domain: neon.com.br
   region: BR
   ats_kind: lever
   ats_board_token: neon
   open_jobs_at_discovery: 9
 - name: Creditas
+  domain: creditas.com
   region: BR
   ats_kind: gupy
   ats_board_token: creditas
   open_jobs_at_discovery: 8
 - name: QuintoAndar
+  domain: quintoandar.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: quintoandar
   open_jobs_at_discovery: 102
 - name: RD Station
+  domain: rdstation.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: rdstation
   open_jobs_at_discovery: 4
 - name: Localiza&Co
+  domain: localiza.com
   region: BR
   ats_kind: gupy
   ats_board_token: localiza
   open_jobs_at_discovery: 662
 - name: Ambev
+  domain: ambev.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: ambev
   open_jobs_at_discovery: 323
 - name: Grupo Boticário
+  domain: grupoboticario.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: grupoboticario
   open_jobs_at_discovery: 228
 - name: Grupo Casas Bahia
+  domain: grupocasasbahia.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: via
   open_jobs_at_discovery: 179
 - name: CI&T
+  domain: ciandt.com
   region: BR
   ats_kind: lever
   ats_board_token: ciandt
   open_jobs_at_discovery: 198
 - name: Stefanini
+  domain: stefanini.com
   region: BR
   ats_kind: gupy
   ats_board_token: stefanini
   open_jobs_at_discovery: 281
 - name: Thoughtworks
+  domain: thoughtworks.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: thoughtworks
   open_jobs_at_discovery: 43
 - name: Zup Innovation
+  domain: zup.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: zupinnovation
   open_jobs_at_discovery: 3
 - name: Globo
+  domain: globo.com
   region: BR
   ats_kind: gupy
   ats_board_token: globo
   open_jobs_at_discovery: 20
 - name: EBANX
+  domain: ebanx.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: ebanx
   open_jobs_at_discovery: 39
 - name: Sicredi
+  domain: sicredi.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: sicredi
   open_jobs_at_discovery: 831
 - name: Wildlife Studios
+  domain: wildlifestudios.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: wildlifestudios
   open_jobs_at_discovery: 16
 - name: VTEX
+  domain: vtex.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: vtex
   open_jobs_at_discovery: 30
 - name: Wellhub
+  domain: wellhub.com
   region: BR
   ats_kind: greenhouse
   ats_board_token: gympass
   open_jobs_at_discovery: 88
 - name: Asaas
+  domain: asaas.com
   region: BR
   ats_kind: gupy
   ats_board_token: asaas
   open_jobs_at_discovery: 24
 - name: Vivo
+  domain: vivo.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: vivo
   open_jobs_at_discovery: 121
 - name: Afya
+  domain: afya.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: afya
   open_jobs_at_discovery: 159
 - name: Méliuz
+  domain: meliuz.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: meliuz
   open_jobs_at_discovery: 3
 - name: Blip
+  domain: blip.ai
   region: BR
   ats_kind: greenhouse
   ats_board_token: blip
   open_jobs_at_discovery: 2
 - name: Arco Educação
+  domain: arcoeducacao.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: arco
   open_jobs_at_discovery: 442
 - name: Jusbrasil
+  domain: jusbrasil.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: jusbrasil
   open_jobs_at_discovery: 17
 - name: Gupy
+  domain: gupy.io
   region: BR
   ats_kind: smartrecruiters
   ats_board_token: gupy
   open_jobs_at_discovery: 8
 - name: Porto
+  domain: portoseguro.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: porto
   open_jobs_at_discovery: 182
 - name: WEG
+  domain: weg.net
   region: BR
   ats_kind: gupy
   ats_board_token: weg
   open_jobs_at_discovery: 108
 - name: Suzano
+  domain: suzano.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: suzano
   open_jobs_at_discovery: 60
 - name: Lojas Renner
+  domain: lojasrenner.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: renner
   open_jobs_at_discovery: 110
 - name: Azzas 2154
+  domain: azzas2154.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: azzas2154
   open_jobs_at_discovery: 2
 - name: Assaí
+  domain: assai.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: assai
   open_jobs_at_discovery: 3470
 - name: GPA
+  domain: gpabr.com
   region: BR
   ats_kind: gupy
   ats_board_token: gpa
   open_jobs_at_discovery: 1193
 - name: Rede D'Or
+  domain: rededor.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: rededor
   open_jobs_at_discovery: 2010
 - name: Compass UOL
+  domain: compass.uol
   region: BR
   ats_kind: gupy
   ats_board_token: compass
   open_jobs_at_discovery: 17
 - name: Softplan
+  domain: softplan.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: softplan
   open_jobs_at_discovery: 3
 - name: Kovi
+  domain: kovi.com.br
   region: BR
   ats_kind: gupy
   ats_board_token: kovi
   open_jobs_at_discovery: 50
 - name: Banco Pan
+  domain: bancopan.com.br
   region: BR
   ats_kind: greenhouse
   ats_board_token: bancopan
   open_jobs_at_discovery: 13
 - name: Bemobi
+  domain: bemobi.com
   region: BR
   ats_kind: gupy
   ats_board_token: bemobi
   open_jobs_at_discovery: 26
 - name: Stripe
+  domain: stripe.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: stripe
   open_jobs_at_discovery: 731
 - name: Airbnb
+  domain: airbnb.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: airbnb
   open_jobs_at_discovery: 173
 - name: Databricks
+  domain: databricks.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: databricks
   open_jobs_at_discovery: 898
 - name: Snowflake
+  domain: snowflake.com
   region: INTL
   ats_kind: ashby
   ats_board_token: snowflake
   open_jobs_at_discovery: 359
 - name: Datadog
+  domain: datadoghq.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: datadog
   open_jobs_at_discovery: 433
 - name: Cloudflare
+  domain: cloudflare.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: cloudflare
   open_jobs_at_discovery: 433
 - name: GitLab
+  domain: gitlab.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: gitlab
   open_jobs_at_discovery: 232
 - name: Coinbase
+  domain: coinbase.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: coinbase
   open_jobs_at_discovery: 226
 - name: Robinhood
+  domain: robinhood.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: robinhood
   open_jobs_at_discovery: 153
 - name: Spotify
+  domain: spotify.com
   region: INTL
   ats_kind: lever
   ats_board_token: spotify
   open_jobs_at_discovery: 82
 - name: Palantir
+  domain: palantir.com
   region: INTL
   ats_kind: lever
   ats_board_token: palantir
   open_jobs_at_discovery: 310
 - name: Plaid
+  domain: plaid.com
   region: INTL
   ats_kind: ashby
   ats_board_token: plaid
   open_jobs_at_discovery: 127
 - name: Figma
+  domain: figma.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: figma
   open_jobs_at_discovery: 139
 - name: Notion
+  domain: notion.so
   region: INTL
   ats_kind: ashby
   ats_board_token: notion
   open_jobs_at_discovery: 128
 - name: OpenAI
+  domain: openai.com
   region: INTL
   ats_kind: ashby
   ats_board_token: openai
   open_jobs_at_discovery: 813
 - name: Anthropic
+  domain: anthropic.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: anthropic
   open_jobs_at_discovery: 656
 - name: Ramp
+  domain: ramp.com
   region: INTL
   ats_kind: ashby
   ats_board_token: ramp
   open_jobs_at_discovery: 167
 - name: Remote
+  domain: remote.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: remote
   open_jobs_at_discovery: 2
 - name: Canonical
+  domain: canonical.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: canonical
   open_jobs_at_discovery: 309
 - name: Elastic
+  domain: elastic.co
   region: INTL
   ats_kind: greenhouse
   ats_board_token: elastic
   open_jobs_at_discovery: 380
 - name: MongoDB
+  domain: mongodb.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: mongodb
   open_jobs_at_discovery: 401
 - name: Grafana Labs
+  domain: grafana.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: grafanalabs
   open_jobs_at_discovery: 114
 - name: Twilio
+  domain: twilio.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: twilio
   open_jobs_at_discovery: 133
 - name: Okta
+  domain: okta.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: okta
   open_jobs_at_discovery: 387
 - name: Zapier
+  domain: zapier.com
   region: INTL
   ats_kind: ashby
   ats_board_token: zapier
   open_jobs_at_discovery: 11
 - name: DoorDash
+  domain: doordash.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: doordashusa
   open_jobs_at_discovery: 456
 - name: Instacart
+  domain: instacart.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: instacart
   open_jobs_at_discovery: 126
 - name: Lyft
+  domain: lyft.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: lyft
   open_jobs_at_discovery: 183
 - name: Pinterest
+  domain: pinterest.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: pinterest
   open_jobs_at_discovery: 156
 - name: Reddit
+  domain: reddit.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: reddit
   open_jobs_at_discovery: 145
 - name: Discord
+  domain: discord.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: discord
   open_jobs_at_discovery: 47
 - name: Duolingo
+  domain: duolingo.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: duolingo
   open_jobs_at_discovery: 63
 - name: Asana
+  domain: asana.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: asana
   open_jobs_at_discovery: 103
 - name: Dropbox
+  domain: dropbox.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: dropbox
   open_jobs_at_discovery: 18
 - name: Airtable
+  domain: airtable.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: airtable
   open_jobs_at_discovery: 4
 - name: Brex
+  domain: brex.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: brex
   open_jobs_at_discovery: 260
 - name: Gusto
+  domain: gusto.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: gusto
   open_jobs_at_discovery: 104
 - name: Vercel
+  domain: vercel.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: vercel
   open_jobs_at_discovery: 93
 - name: Supabase
+  domain: supabase.com
   region: INTL
   ats_kind: ashby
   ats_board_token: supabase
   open_jobs_at_discovery: 54
 - name: Hugging Face
+  domain: huggingface.co
   region: INTL
   ats_kind: workable
   ats_board_token: huggingface
   open_jobs_at_discovery: 6
 - name: Bosch
+  domain: bosch.com
   region: INTL
   ats_kind: smartrecruiters
   ats_board_token: BoschGroup
   open_jobs_at_discovery: 5079
 - name: Toptal
+  domain: toptal.com
   region: INTL
   ats_kind: lever
   ats_board_token: toptal
   open_jobs_at_discovery: 32
 - name: Wikimedia
+  domain: wikimedia.org
   region: INTL
   ats_kind: greenhouse
   ats_board_token: wikimedia
   open_jobs_at_discovery: 13
 - name: Sentry
+  domain: sentry.io
   region: INTL
   ats_kind: ashby
   ats_board_token: sentry
   open_jobs_at_discovery: 46
 - name: PostHog
+  domain: posthog.com
   region: INTL
   ats_kind: ashby
   ats_board_token: posthog
   open_jobs_at_discovery: 10
 - name: Linear
+  domain: linear.app
   region: INTL
   ats_kind: ashby
   ats_board_token: linear
   open_jobs_at_discovery: 29
 - name: Scale AI
+  domain: scale.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: scaleai
   open_jobs_at_discovery: 182
 - name: Samsara
+  domain: samsara.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: samsara
   open_jobs_at_discovery: 262
 - name: Affirm
+  domain: affirm.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: affirm
   open_jobs_at_discovery: 212
 - name: Chime
+  domain: chime.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: chime
   open_jobs_at_discovery: 72
 - name: SoFi
+  domain: sofi.com
   region: INTL
   ats_kind: greenhouse
   ats_board_token: sofi
   open_jobs_at_discovery: 49
 - name: Nuro
+  domain: nuro.ai
   region: INTL
   ats_kind: greenhouse
   ats_board_token: nuro

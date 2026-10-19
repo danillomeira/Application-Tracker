@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { useLiveEvents } from "@/lib/ws";
 import { AgentControl } from "./agent-control";
 import { ThemeToggle } from "./theme-toggle";
+import { PageTour, TourButton } from "./tour";
 import { EASE } from "./ui";
 
 const NAV_GROUPS = [
@@ -60,7 +61,7 @@ const NAV_GROUPS = [
 function Brand() {
   return (
     <Link href="/hoje" className="flex items-center gap-2.5 px-2">
-      <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-violet-500 text-white shadow-md shadow-primary/30">
+      <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-sky-500 text-white shadow-md shadow-primary/30">
         <Sparkles size={16} />
       </div>
       <div className="leading-tight">
@@ -110,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <motion.div
-          className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-violet-500"
+          className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-sky-500"
           animate={{ rotate: [0, 90, 180, 270, 360], borderRadius: ["30%", "50%", "30%"] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -134,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </AnimatePresence>
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-sidebar px-3 py-4 transition-transform duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-sidebar px-3 py-4 transition-transform duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -144,7 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <X size={18} />
           </button>
         </div>
-        <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
+        <nav className="flex flex-1 flex-col gap-4 overflow-y-auto">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
               <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
@@ -158,7 +159,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       key={href}
                       href={href}
                       className={cn(
-                        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                        "relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
                         active ? "font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
@@ -189,12 +190,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <ThemeToggle />
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
           <button className="rounded-lg p-1.5 hover:bg-muted md:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu size={18} />
           </button>
           <div className="flex-1" />
+          <TourButton />
           <AgentControl />
           <Link
             href="/config?tab=notificacoes"
@@ -216,19 +218,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </AnimatePresence>
           </Link>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.25, ease: EASE }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+        <main className="mx-auto w-full max-w-[1680px] flex-1 px-4 py-5 md:px-6 md:py-6">
+          {/* Só animação de entrada. AnimatePresence com exit no App Router troca o conteúdo antes da saída
+              terminar e a página nova fica presa invisível (opacity 0). */}
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: EASE }}
+          >
+            {children}
+          </motion.div>
         </main>
+        <PageTour />
       </div>
     </div>
   );

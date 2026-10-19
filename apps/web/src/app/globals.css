@@ -2,22 +2,22 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tema claro (padrão). Paleta índigo com fundo levemente frio para os cartões "flutuarem". */
+/* Tema claro (padrão). Paleta azul com fundo levemente frio para os cartões "flutuarem". */
 :root {
-  --background: #f6f7fb;
+  --background: #f5f7fb;
   --foreground: #0f172a;
   --card: #ffffff;
   --muted: #eef1f6;
-  --muted-foreground: #64748b;
+  --muted-foreground: #526075;
   --border: #e3e7ef;
-  --primary: #4f46e5;
-  --primary-strong: #4338ca;
+  --primary: #2563eb;
+  --primary-strong: #1d4ed8;
   --primary-foreground: #ffffff;
-  --accent: #eef0ff;
+  --accent: #eaf2ff;
   --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
-  --ring: #6366f1;
+  --ring: #3b82f6;
   --sidebar: #ffffff;
   --shadow-color: 222 47% 11%;
 }
@@ -29,16 +29,16 @@
     --foreground: #e5e9f2;
     --card: #11151f;
     --muted: #1a2030;
-    --muted-foreground: #94a0b8;
+    --muted-foreground: #a3adc2;
     --border: #232a3b;
-    --primary: #818cf8;
-    --primary-strong: #a5b4fc;
+    --primary: #60a5fa;
+    --primary-strong: #93c5fd;
     --primary-foreground: #0a0d16;
-    --accent: #1e1b4b;
+    --accent: #172554;
     --success: #34d399;
     --warning: #fbbf24;
     --danger: #f87171;
-    --ring: #818cf8;
+    --ring: #60a5fa;
     --sidebar: #0d1119;
     --shadow-color: 0 0% 0%;
   }
@@ -49,21 +49,23 @@
   --foreground: #e5e9f2;
   --card: #11151f;
   --muted: #1a2030;
-  --muted-foreground: #94a0b8;
+  --muted-foreground: #a3adc2;
   --border: #232a3b;
-  --primary: #818cf8;
-  --primary-strong: #a5b4fc;
+  --primary: #60a5fa;
+  --primary-strong: #93c5fd;
   --primary-foreground: #0a0d16;
-  --accent: #1e1b4b;
+  --accent: #172554;
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
-  --ring: #818cf8;
+  --ring: #60a5fa;
   --sidebar: #0d1119;
   --shadow-color: 0 0% 0%;
 }
 
 @theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter Variable", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -95,6 +97,8 @@
 
 html {
   color-scheme: light;
+  /* base um pouco menor: todo o app (texto e espaçamentos em rem) fica mais compacto */
+  font-size: 15px;
 }
 html.dark {
   color-scheme: dark;
@@ -108,13 +112,32 @@ html.dark {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-feature-settings: "cv11", "ss01";
+  /* Tipografia no estilo Apple: SF Pro do sistema no Mac/iOS (a licença da SF não permite embutir para outros
+     sistemas); no Windows/Linux, a Inter embutida no app, a fonte aberta mais próxima da SF. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter Variable", "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: -0.011em;
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 * {
   border-color: var(--border);
+}
+
+/* Títulos como na Apple: mais justos e firmes */
+h1, h2, h3 {
+  letter-spacing: -0.022em;
+  font-weight: 600;
+}
+h1 {
+  letter-spacing: -0.028em;
+}
+code, kbd, pre {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 :focus-visible {

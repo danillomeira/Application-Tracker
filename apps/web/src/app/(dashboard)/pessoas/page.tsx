@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import { Users } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -61,7 +62,8 @@ export default function PeoplePage() {
           {data.map((p) => (
             <Card key={p.id} className="space-y-1 text-sm">
               <div className="flex items-start justify-between gap-2">
-                <div>
+                {p.company_name && <CompanyLogo name={p.company_name} className="h-9 w-9" />}
+                <div className="min-w-0 flex-1">
                   <p className="font-medium">{p.full_name}</p>
                   <p className="text-xs text-muted-foreground">{p.role ?? "—"} · {p.company_name ?? "sem empresa"}</p>
                 </div>

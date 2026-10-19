@@ -4,7 +4,8 @@ import { KanbanSquare } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
-import { Avatar, Badge, Button, Chip, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from "@/components/ui";
+import { CompanyLogo } from "@/components/brand";
+import { Badge, Button, Chip, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useGet, useSend } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE, STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
@@ -17,6 +18,7 @@ type App = {
   channel: string;
   job_title: string;
   company_name: string;
+  company_id?: string | null;
   quadrant: string | null;
   last_activity_at: string;
   next_action: string | null;
@@ -26,7 +28,7 @@ type App = {
 const COLUMNS: { key: string; title: string; statuses: string[]; drop: string; dot: string }[] = [
   { key: "fila", title: "Fila", statuses: ["discovered", "queued", "in_progress", "needs_input", "awaiting_review"], drop: "queued", dot: "bg-slate-400" },
   { key: "enviadas", title: "Candidatadas", statuses: ["submitted", "under_review"], drop: "under_review", dot: "bg-primary" },
-  { key: "entrevista", title: "Entrevista", statuses: ["interviewing"], drop: "interviewing", dot: "bg-violet-500" },
+  { key: "entrevista", title: "Entrevista", statuses: ["interviewing"], drop: "interviewing", dot: "bg-sky-500" },
   { key: "teste", title: "Teste técnico", statuses: ["assessment"], drop: "assessment", dot: "bg-warning" },
   { key: "oferta", title: "Oferta", statuses: ["offer", "accepted"], drop: "offer", dot: "bg-success" },
   { key: "encerradas", title: "Encerradas", statuses: ["rejected", "ghosted", "declined", "withdrawn"], drop: "rejected", dot: "bg-danger" },
@@ -51,7 +53,7 @@ export default function ApplicationsPage() {
         actions={
           <>
             <Input placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />
-            <ManualButton />
+            <span data-tour="manual"><ManualButton /></span>
           </>
         }
       />
@@ -66,14 +68,14 @@ export default function ApplicationsPage() {
       {isLoading ? (
         <Skeleton className="h-96" />
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-2.5 overflow-x-auto pb-2" data-tour="kanban">
           {COLUMNS.map((col) => {
             const items = (data ?? []).filter((a) => col.statuses.includes(a.status) && (showFound || a.status !== "discovered"));
             return (
               <div
                 key={col.key}
                 className={cn(
-                  "w-72 shrink-0 rounded-xl border border-transparent bg-muted/50 p-2 transition-colors",
+                  "min-w-[168px] flex-1 basis-0 rounded-xl border border-transparent bg-muted/50 p-2 transition-colors",
                   over === col.key && dragging && "border-primary/50 bg-accent",
                 )}
                 onDragOver={(e) => {
@@ -115,7 +117,7 @@ export default function ApplicationsPage() {
                           className="block cursor-grab rounded-lg border bg-card p-2.5 text-sm shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[var(--shadow-lift)] active:cursor-grabbing"
                         >
                           <div className="flex items-start gap-2">
-                            <Avatar name={a.company_name} className="h-7 w-7 rounded-lg text-[10px]" />
+                            <CompanyLogo id={a.company_id} name={a.company_name} className="h-8 w-8 rounded-lg p-1 text-[10px]" />
                             <div className="min-w-0">
                               <p className="line-clamp-2 font-medium leading-snug">{a.job_title}</p>
                               <p className="truncate text-xs text-muted-foreground">{a.company_name}</p>

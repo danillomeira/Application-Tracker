@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import func, select
 
 from tracker.api.deps import SessionDep, TaskAccepted, get_or_404
@@ -51,6 +52,18 @@ async def create_company(body: CompanyIn, session: SessionDep, _user: CurrentUse
     if c.is_monitored and c.ats_board_token:
         dispatch("ingest.poll_company", company_id=str(c.id))
     return c
+
+
+@router.get("/logo")
+async def logo_by_name(name: str, session: SessionDep, _user: CurrentUser) -> Response:
+    """Logo pelo nome da empresa (para telas que só têm o nome). 404 = sem logo; o dashboard mostra as iniciais."""
+    from tracker.modules.companies.logos import logo_by_name as find
+
+    data = await find(session, name[:200])
+    if data is None:
+        raise HTTPException(404, "sem logo")
+    kind = "image/png" if data[:4] == b"\x89PNG" else "image/x-icon"
+    return Response(data, media_type=kind, headers={"Cache-Control": "private, max-age=604800"})
 
 
 @router.get("/{company_id}", response_model=CompanyDetail)
@@ -132,6 +145,21 @@ async def seed_companies(session: SessionDep, monitor: bool = True) -> dict[str,
             c.ats_kind, c.ats_board_token = item["ats_kind"], item["ats_board_token"]
         c.is_monitored = c.is_monitored or monitor
         c.hq_location = c.hq_location or ("Brasil" if item.get("region") == "BR" else "Internacional")
+        if item.get("domain") and not c.domains:
+            c.domains = [item["domain"]]
         added += existed is None
         updated += existed is not None
     return {"added": added, "updated": updated}
+
+
+@router.get("/{company_id}/logo")
+async def logo(company_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> Response:
+    """Ícone do site da empresa (cache no storage). 404 quando não há: o dashboard mostra as iniciais."""
+    from tracker.modules.companies.logos import company_logo
+
+    company = await get_or_404(session, Company, company_id)
+    data = await company_logo(session, company)
+    if data is None:
+        raise HTTPException(404, "sem logo")
+    kind = "image/png" if data[:4] == b"\x89PNG" else "image/x-icon"
+    return Response(data, media_type=kind, headers={"Cache-Control": "private, max-age=604800"})

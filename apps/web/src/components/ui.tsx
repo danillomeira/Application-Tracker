@@ -4,9 +4,10 @@
  * (prefers-reduced-motion) recebe a versão estática.
  */
 import { cva, type VariantProps } from "class-variance-authority";
-import { Inbox, X } from "lucide-react";
+import { Check, ChevronDown, Inbox, X } from "lucide-react";
 import { AnimatePresence, animate, motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 export const EASE = [0.22, 1, 0.36, 1] as const;
@@ -117,10 +118,188 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTML
 );
 Textarea.displayName = "Textarea";
 
-export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
-  ({ className, ...props }, ref) => <select ref={ref} className={cn(fieldBase, "h-9 py-1 pr-8", className)} {...props} />,
-);
-Select.displayName = "Select";
+type Opt = { value: string; label: string; disabled?: boolean };
+
+function textOf(node: React.ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) return textOf(node.props.children);
+  return "";
+}
+
+function collectOptions(children: React.ReactNode): Opt[] {
+  const out: Opt[] = [];
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement<{ value?: string | number; children?: React.ReactNode; disabled?: boolean }>(child)) return;
+    if (child.type === React.Fragment) {
+      out.push(...collectOptions(child.props.children));
+      return;
+    }
+    const label = textOf(child.props.children);
+    out.push({ value: String(child.props.value ?? label), label, disabled: child.props.disabled });
+  });
+  return out;
+}
+
+const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+type SelectProps = {
+  value?: string | number;
+  defaultValue?: string | number;
+  onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  children?: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+  id?: string;
+  "aria-label"?: string;
+  placeholder?: string;
+};
+
+/**
+ * Seleção com busca: clique e já digite para filtrar (sem acento/caixa), setas + Enter para escolher, Esc fecha.
+ * Mesma API do <select> nativo (filhos <option> e onChange com e.target.value), então troca em todas as telas.
+ */
+export function Select({ value, defaultValue, onChange, children, className, disabled, id, placeholder, ...rest }: SelectProps) {
+  const options = collectOptions(children);
+  const [inner, setInner] = React.useState(String(defaultValue ?? options[0]?.value ?? ""));
+  const current = value != null ? String(value) : inner;
+  const selected = options.find((o) => o.value === current);
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [active, setActive] = React.useState(0);
+  const [rect, setRect] = React.useState<DOMRect | null>(null);
+  const wrap = React.useRef<HTMLDivElement>(null);
+  const input = React.useRef<HTMLInputElement>(null);
+  const list = React.useRef<HTMLUListElement>(null);
+  const listId = React.useId();
+  const filtered = query ? options.filter((o) => fold(o.label).includes(fold(query))) : options;
+
+  const place = React.useCallback(() => wrap.current && setRect(wrap.current.getBoundingClientRect()), []);
+  const show = () => {
+    if (disabled) return;
+    place();
+    setQuery("");
+    setActive(Math.max(0, options.findIndex((o) => o.value === current)));
+    setOpen(true);
+  };
+  const choose = (o: Opt) => {
+    if (o.disabled) return;
+    if (value == null) setInner(o.value);
+    onChange?.({ target: { value: o.value }, currentTarget: { value: o.value } } as unknown as React.ChangeEvent<HTMLSelectElement>);
+    setOpen(false);
+    setQuery("");
+    input.current?.blur();
+  };
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!wrap.current?.contains(t) && !list.current?.contains(t)) setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, place]);
+
+  React.useEffect(() => {
+    list.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
+  const below = rect ? window.innerHeight - rect.bottom > 260 || rect.top < 260 : true;
+  return (
+    <div ref={wrap} className={cn("relative w-full min-w-32", className)}>
+      <input
+        ref={input}
+        id={id}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-label={rest["aria-label"]}
+        disabled={disabled}
+        value={open ? query : (selected?.label ?? "")}
+        placeholder={open ? (selected?.label || "Digite para buscar…") : (placeholder ?? "Selecione…")}
+        onFocus={show}
+        onClick={() => !open && show()}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(0);
+          if (!open) show();
+        }}
+        onKeyDown={(e) => {
+          if (!open && (e.key === "ArrowDown" || e.key === "Enter")) {
+            e.preventDefault();
+            show();
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((a) => Math.min(filtered.length - 1, a + 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((a) => Math.max(0, a - 1));
+          } else if (e.key === "Enter" && open) {
+            e.preventDefault();
+            if (filtered[active]) choose(filtered[active]);
+          } else if (e.key === "Escape" || e.key === "Tab") {
+            setOpen(false);
+          }
+        }}
+        className={cn(fieldBase, "h-[inherit] min-h-9 cursor-pointer pr-9 text-left", open && "cursor-text")}
+      />
+      <ChevronDown
+        size={16}
+        aria-hidden
+        className={cn("pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-transform", open && "rotate-180")}
+      />
+      {open &&
+        rect &&
+        createPortal(
+          <ul
+            ref={list}
+            id={listId}
+            role="listbox"
+            className="fixed z-[70] max-h-64 overflow-y-auto rounded-xl border bg-card p-1 shadow-[var(--shadow-lift)]"
+            style={{
+              left: rect.left,
+              width: Math.max(rect.width, 200),
+              ...(below ? { top: rect.bottom + 4 } : { bottom: window.innerHeight - rect.top + 4 }),
+            }}
+          >
+            {filtered.length === 0 && <li className="px-3 py-2 text-sm text-muted-foreground">Nada encontrado</li>}
+            {filtered.map((o, idx) => (
+              <li
+                key={`${o.value}-${idx}`}
+                data-idx={idx}
+                role="option"
+                aria-selected={o.value === current}
+                aria-disabled={o.disabled}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(o);
+                }}
+                onMouseEnter={() => setActive(idx)}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm",
+                  idx === active && "bg-accent text-primary",
+                  o.disabled && "cursor-not-allowed opacity-50",
+                )}
+              >
+                <span className="truncate">{o.label || "—"}</span>
+                {o.value === current && <Check size={15} className="shrink-0 text-primary" />}
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )}
+    </div>
+  );
+}
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return <label className={cn("text-xs font-medium text-muted-foreground", className)} {...props} />;
@@ -152,27 +331,31 @@ export function PageHeader({
   description,
   actions,
   icon,
+  media,
 }: {
   title: string;
   description?: React.ReactNode;
   actions?: React.ReactNode;
   icon?: React.ReactNode;
+  /** Elemento no lugar do ícone (ex.: logo da empresa), sem o fundo colorido. */
+  media?: React.ReactNode;
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: EASE }}
-      className="mb-6 flex flex-wrap items-end justify-between gap-3"
+      className="mb-5 flex flex-wrap items-end justify-between gap-3"
     >
       <div className="flex items-center gap-3">
-        {icon && (
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-md shadow-primary/25">
+        {media}
+        {!media && icon && (
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-sky-500 text-white shadow-md shadow-primary/25">
             {icon}
           </div>
         )}
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
           {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
         </div>
       </div>
@@ -322,12 +505,12 @@ export function ScoreRing({ value, label, size = 46 }: { value: number; label: s
 }
 
 const AVATAR_COLORS = [
-  "from-indigo-500 to-violet-500",
+  "from-blue-600 to-sky-500",
   "from-sky-500 to-cyan-500",
   "from-emerald-500 to-teal-500",
   "from-amber-500 to-orange-500",
   "from-rose-500 to-pink-500",
-  "from-fuchsia-500 to-purple-500",
+  "from-cyan-500 to-blue-600",
 ];
 
 /** Iniciais da empresa/pessoa com cor estável. */

@@ -1,11 +1,13 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import {
   AlertTriangle,
   ArrowRight,
   Bell,
   Briefcase,
   CalendarClock,
+  Check,
   CalendarDays,
   FileCheck2,
   Inbox,
@@ -13,13 +15,13 @@ import {
   MessageCircleQuestion,
   Send,
   Sparkles,
-  Zap,
 } from "lucide-react";
+import { motion } from "motion/react";
 import Link from "next/link";
-import { Badge, Card, CardTitle, EmptyState, ScoreRing, Skeleton, Stagger, StaggerItem, Stat } from "@/components/ui";
+import { Badge, Card, CardTitle, EASE, EmptyState, ScoreRing, Skeleton, Stagger, StaggerItem } from "@/components/ui";
 import { useGet } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE } from "@/lib/labels";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 type Today = {
   onboarding_needed: boolean;
@@ -43,6 +45,67 @@ const PENDING: [string, string, string, React.ComponentType<{ size?: number }>][
   ["drafts", "Rascunhos de e-mail", "/inbox?tab=rascunhos", Inbox],
 ];
 
+function Journey({ data }: { data: Today }) {
+  const steps = [
+    { icon: Briefcase, title: "Ver vagas", value: data.stats.new_jobs_7d, unit: "novas na semana", href: "/vagas", cta: "Ver vagas recomendadas" },
+    { icon: Send, title: "Candidatar-se", value: data.stats.applied_7d, unit: "enviadas na semana", href: "/vagas", cta: "Escolher uma vaga" },
+    { icon: Bell, title: "Acompanhar", value: data.stats.responses_7d, unit: "respostas na semana", href: "/candidaturas", cta: "Ver candidaturas" },
+    { icon: CalendarClock, title: "Entrevistas", value: data.interviews.length, unit: "nos próximos 7 dias", href: "/entrevistas", cta: "Preparar entrevistas" },
+  ];
+  // o próximo passo sugerido: entrevista marcada > respostas chegando > candidatar > ver vagas
+  const next = data.interviews.length ? 3 : data.stats.responses_7d ? 2 : data.stats.new_jobs_7d ? 1 : 0;
+  return (
+    <div data-tour="journey">
+      <p className="mb-2 text-sm font-semibold">O caminho de uma candidatura</p>
+      <Card className="relative overflow-hidden p-0">
+        <div className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[42px] hidden h-0.5 bg-border md:block">
+          <motion.div
+            className="h-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: `${(next / (steps.length - 1)) * 100}%` }}
+            transition={{ duration: 0.9, ease: EASE }}
+          />
+        </div>
+        <div className="grid divide-y md:grid-cols-4 md:divide-y-0">
+          {steps.map((st, idx) => {
+            const isNext = idx === next;
+            const done = idx < next;
+            return (
+              <Link
+                key={st.title}
+                href={st.href}
+                className={cn(
+                  "group relative flex flex-col items-center px-4 py-5 text-center transition-colors hover:bg-muted/50",
+                  isNext && "bg-accent/50",
+                )}
+              >
+                <span
+                  className={cn(
+                    "relative z-10 grid h-11 w-11 place-items-center rounded-full border-2 bg-card transition-transform group-hover:scale-105",
+                    isNext ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/30" : done ? "border-primary text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  <st.icon size={18} />
+                </span>
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Passo {idx + 1}</p>
+                <p className="font-semibold">{st.title}</p>
+                <p className="mt-1">
+                  <span className="text-2xl font-semibold tabular-nums">{st.value}</span>{" "}
+                  <span className="text-xs text-muted-foreground">{st.unit}</span>
+                </p>
+                <span className={cn("mt-2 inline-flex items-center gap-1 text-xs font-medium", isNext ? "text-primary" : "text-muted-foreground group-hover:text-primary")}>
+                  {st.cta} <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+                </span>
+                {isNext && <Badge tone="primary" className="absolute right-3 top-3">próximo passo</Badge>}
+              </Link>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
@@ -65,7 +128,7 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-6">
-      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary via-indigo-500 to-violet-500 p-6 text-white shadow-lg shadow-primary/25 md:p-8">
+      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary via-blue-500 to-sky-500 p-6 text-white shadow-lg shadow-primary/25 md:p-8">
         <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-20 right-24 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
         <p className="text-sm text-white/80">{today}</p>
@@ -117,40 +180,33 @@ export default function TodayPage() {
         </Card>
       )}
 
-      <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StaggerItem><Stat label="Candidaturas (7 dias)" value={data.stats.applied_7d} icon={<Send size={17} />} /></StaggerItem>
-        <StaggerItem><Stat label="Respostas (7 dias)" value={data.stats.responses_7d} icon={<Bell size={17} />} tone="success" /></StaggerItem>
-        <StaggerItem><Stat label="Vagas novas (7 dias)" value={data.stats.new_jobs_7d} icon={<Briefcase size={17} />} tone="warning" /></StaggerItem>
-        <StaggerItem>
-          <Stat
-            label="Easy Apply hoje"
-            value={`${data.quota.used}/${data.quota.limit}`}
-            hint={data.agent.running ? "robô trabalhando" : `${data.agent.queued} na fila`}
-            icon={<Zap size={17} />}
-          />
-        </StaggerItem>
-      </Stagger>
+      <Journey data={data} />
 
-      <div>
-        <p className="mb-2 text-sm font-semibold">Pendências</p>
-        <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {PENDING.map(([k, label, href, Icon]) => {
-            const n = data.pending[k] ?? 0;
-            return (
+      <div data-tour="pending">
+        <p className="mb-2 text-sm font-semibold">Pendências <span className="font-normal text-muted-foreground">· coisas que só você pode resolver</span></p>
+        {PENDING.some(([k]) => (data.pending[k] ?? 0) > 0) ? (
+          <Stagger className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {PENDING.filter(([k]) => (data.pending[k] ?? 0) > 0).map(([k, label, href, Icon]) => (
               <StaggerItem key={k}>
                 <Link href={href}>
-                  <Card interactive className={n ? "border-warning/40" : "opacity-70"}>
-                    <div className="flex items-center justify-between">
-                      <span className={n ? "text-warning" : "text-muted-foreground"}><Icon size={17} /></span>
-                      <span className="text-xl font-semibold tabular-nums">{n}</span>
+                  <Card interactive className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-warning/12 text-warning"><Icon size={18} /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-muted-foreground">clique para resolver</p>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">{label}</p>
+                    <span className="grid h-8 min-w-8 place-items-center rounded-full bg-warning px-2 text-sm font-semibold text-white tabular-nums">{data.pending[k]}</span>
                   </Card>
                 </Link>
               </StaggerItem>
-            );
-          })}
-        </Stagger>
+            ))}
+          </Stagger>
+        ) : (
+          <Card className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-success/12 text-success"><Check size={17} /></span>
+            Tudo em dia: nenhuma pendência agora.
+          </Card>
+        )}
         {data.agent.paused_until && (
           <p className="mt-2 text-xs text-danger">Robô pausado por segurança até {formatDateTime(data.agent.paused_until)}</p>
         )}
@@ -166,10 +222,12 @@ export default function TodayPage() {
               {data.interviews.map((i) => (
                 <StaggerItem key={i.event_id}>
                   <div className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors hover:bg-muted/50">
-                    <div className="min-w-0">
+                    <CompanyLogo name={i.company} className="h-9 w-9" />
+                    <div className="min-w-0 flex-1">
                       <Link href={`/candidaturas/${i.application_id}`} className="block truncate font-medium hover:text-primary">
-                        {i.company} · {i.job_title}
+                        {i.job_title}
                       </Link>
+                      <p className="truncate text-xs text-muted-foreground">{i.company}</p>
                       <p className="text-xs text-muted-foreground">{formatDateTime(i.starts_at)}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -208,11 +266,14 @@ export default function TodayPage() {
             <Stagger className="space-y-2 text-sm">
               {data.followups.map((f) => (
                 <StaggerItem key={f.application_id}>
-                  <div className="rounded-lg border px-3 py-2.5 transition-colors hover:bg-muted/50">
-                    <Link href={`/candidaturas/${f.application_id}`} className="font-medium hover:text-primary">
-                      {f.company} · {f.job_title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">{f.next_action}</p>
+                  <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-muted/50">
+                    <CompanyLogo name={f.company} className="h-9 w-9" />
+                    <div className="min-w-0">
+                      <Link href={`/candidaturas/${f.application_id}`} className="block truncate font-medium hover:text-primary">
+                        {f.job_title} · {f.company}
+                      </Link>
+                      <p className="truncate text-xs text-muted-foreground">{f.next_action}</p>
+                    </div>
                   </div>
                 </StaggerItem>
               ))}
@@ -221,7 +282,7 @@ export default function TodayPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card data-tour="top-jobs">
         <div className="mb-3 flex items-center justify-between">
           <CardTitle className="mb-0">Melhores vagas novas</CardTitle>
           <Link href="/vagas" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
@@ -238,6 +299,7 @@ export default function TodayPage() {
               <StaggerItem key={j.job_id}>
                 <Link href={`/vagas/${j.job_id}`}>
                   <div className="flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[var(--shadow-soft)]">
+                    <CompanyLogo name={j.company} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{j.title}</p>
                       <p className="truncate text-xs text-muted-foreground">{j.company}</p>

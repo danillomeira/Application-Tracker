@@ -1,5 +1,6 @@
 "use client";
 
+import { CompanyLogo } from "@/components/brand";
 import Link from "next/link";
 import { use } from "react";
 import { Badge, Button, Card, CardTitle, PageHeader, ScoreBar, Skeleton } from "@/components/ui";
@@ -87,6 +88,7 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
   return (
     <div className="space-y-4">
       <PageHeader
+        media={<CompanyLogo id={job.company_id} name={job.company_name} className="h-12 w-12" />}
         title={job.title}
         description={`${job.company_name} · ${job.location ?? "—"} · ${job.work_model ?? "modelo n/d"}${job.regime ? ` · ${job.regime}` : ""}`}
         actions={

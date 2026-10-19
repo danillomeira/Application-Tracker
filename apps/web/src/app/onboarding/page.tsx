@@ -115,10 +115,10 @@ export default function OnboardingPage() {
   const s = status.data;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_10%_-10%,color-mix(in_oklab,var(--primary)_14%,transparent),transparent),radial-gradient(900px_500px_at_110%_10%,color-mix(in_oklab,#8b5cf6_12%,transparent),transparent)]">
+    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_10%_-10%,color-mix(in_oklab,var(--primary)_14%,transparent),transparent),radial-gradient(900px_500px_at_110%_10%,color-mix(in_oklab,#0ea5e9_12%,transparent),transparent)]">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-lg shadow-primary/30">
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-sky-500 text-white shadow-lg shadow-primary/30">
             <Sparkles size={17} />
           </div>
           <div className="leading-tight">
@@ -277,7 +277,7 @@ function Welcome({ onNext }: { onNext: () => void }) {
         </Badge>
         <h1 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
           Sua busca de emprego,{" "}
-          <span className="bg-gradient-to-r from-primary to-violet-500 bg-clip-text text-transparent">organizada e no automático</span>
+          <span className="bg-gradient-to-r from-primary to-sky-500 bg-clip-text text-transparent">organizada e no automático</span>
         </h1>
         <p className="mt-4 text-muted-foreground">
           O app encontra vagas, dá nota de chance e atratividade, prepara o currículo certo para cada uma, ajuda a preencher candidaturas e acompanha
@@ -434,7 +434,7 @@ function ResumeStep({ hasResume, onDone }: { hasResume: boolean; onDone: () => v
       ) : phase === "extracting" || phase === "uploading" ? (
         <div className="flex flex-col items-center py-12 text-center">
           <motion.div
-            className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-lg shadow-primary/30"
+            className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-sky-500 text-white shadow-lg shadow-primary/30"
             animate={{ scale: [1, 1.08, 1], rotate: [0, 6, -6, 0] }}
             transition={{ duration: 1.8, repeat: Infinity }}
           >

@@ -12,11 +12,11 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(900px_500px_at_20%_0%,color-mix(in_oklab,var(--primary)_18%,transparent),transparent),radial-gradient(800px_500px_at_100%_100%,color-mix(in_oklab,#8b5cf6_14%,transparent),transparent)] p-4">
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(900px_500px_at_20%_0%,color-mix(in_oklab,var(--primary)_18%,transparent),transparent),radial-gradient(800px_500px_at_100%_100%,color-mix(in_oklab,#0ea5e9_14%,transparent),transparent)] p-4">
       <motion.div className="w-full max-w-sm" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE }}>
         <Card className="p-8 shadow-[var(--shadow-lift)]">
           <motion.div
-            className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-lg shadow-primary/30"
+            className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-primary to-sky-500 text-white shadow-lg shadow-primary/30"
             initial={{ scale: 0.6, rotate: -12 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.1 }}

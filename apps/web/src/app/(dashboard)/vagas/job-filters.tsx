@@ -3,6 +3,7 @@
 import { ChevronDown, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
+import { TechDot } from "@/components/brand";
 import { Chip, EASE, Input, Label } from "@/components/ui";
 import { APPLY_KIND_LABEL, QUADRANT_LABEL, SENIORITY_LABEL, WORK_MODEL_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
@@ -172,12 +173,14 @@ function SearchableList<T extends { key: string; label: string; count: number }>
   onToggle,
   placeholder,
   initial = 14,
+  icon,
 }: {
   items: T[];
   selected: string[];
   onToggle: (key: string) => void;
   placeholder: string;
   initial?: number;
+  icon?: (item: T) => React.ReactNode;
 }) {
   const [term, setTerm] = useState("");
   const [all, setAll] = useState(false);
@@ -195,6 +198,7 @@ function SearchableList<T extends { key: string; label: string; count: number }>
       <div className="flex flex-wrap gap-1.5">
         {shown.map((i) => (
           <Chip key={i.key} active={selected.includes(i.key)} count={i.count} onClick={() => onToggle(i.key)}>
+            {icon?.(i)}
             {i.label}
           </Chip>
         ))}
@@ -263,7 +267,7 @@ export function FilterPanel({ f, set, facets }: { f: Filters; set: (p: Partial<F
   const salaryMax = Math.max(30000, Math.ceil((facets?.salary.max ?? 30000) / 5000) * 5000);
   return (
     <div className="text-sm">
-      <Section title="Prioridade" badge={f.quadrant.length}>
+      <Section title="Prioridade" badge={f.quadrant.length} defaultOpen={f.quadrant.length > 0}>
         <ChipGroup
           options={["top", "bet", "volume", "discard", "blocked"].map((v) => ({ value: v }))}
           selected={f.quadrant}
@@ -277,10 +281,12 @@ export function FilterPanel({ f, set, facets }: { f: Filters; set: (p: Partial<F
           selected={f.tech}
           onToggle={(k) => set({ tech: toggle(f.tech, k) })}
           placeholder="Python, React, AWS…"
+          icon={(i) => <TechDot name={i.label} />}
+          initial={10}
         />
         <p className="mt-2 text-[11px] text-muted-foreground">Vaga precisa citar todas as selecionadas.</p>
       </Section>
-      <Section title="Empresas" badge={f.company.length}>
+      <Section title="Empresas" badge={f.company.length} defaultOpen={f.company.length > 0}>
         <SearchableList
           items={(facets?.companies ?? []).map((c) => ({ key: c.id, label: c.name, count: c.count }))}
           selected={f.company}
@@ -289,7 +295,7 @@ export function FilterPanel({ f, set, facets }: { f: Filters; set: (p: Partial<F
           initial={10}
         />
       </Section>
-      <Section title="Salário" badge={(f.salary_min != null ? 1 : 0) + (f.with_salary ? 1 : 0)}>
+      <Section title="Salário" badge={(f.salary_min != null ? 1 : 0) + (f.with_salary ? 1 : 0)} defaultOpen={f.salary_min != null || f.with_salary}>
         <div className="space-y-3">
           <Range label="Mínimo por mês" value={f.salary_min} onChange={(salary_min) => set({ salary_min })} min={0} max={salaryMax} step={500} format={brl} />
           <label className="flex cursor-pointer items-center gap-2 text-xs">

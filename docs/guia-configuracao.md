@@ -89,7 +89,43 @@ Abra **http://localhost:3100**, clique em **Entrar** e siga o onboarding:
 
 O app usa IA para ler vagas, montar currículos e classificar e-mails. **Escolha um** dos caminhos.
 
-### Opção A: Claude Code com a sua assinatura (recomendado)
+### Opção A: Ollama local (Qwen, sem custo por chamada)
+
+Com o Ollama acessível em `http://localhost:11434`, baixe o modelo:
+
+```bash
+ollama pull qwen2.5-coder:3b
+```
+
+Se estiver usando o container Podman `ollama` no Fedora WSL:
+
+```powershell
+wsl -d FedoraLinux-43 -- podman start ollama
+wsl -d FedoraLinux-43 -- podman exec ollama ollama pull qwen2.5-coder:3b
+```
+
+No `.env`, selecione o backend local:
+
+```dotenv
+AI_BACKEND=ollama
+AI_MODEL_DEFAULT=qwen2.5-coder:3b
+AI_MODEL_JOB_EXTRACT=qwen2.5-coder:3b
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+Reinicie o `tracker-dev`. O teste da IA no onboarding confirma se o Ollama e o modelo estão acessíveis. PDFs com texto selecionável são convertidos localmente em texto; PDFs digitalizados e imagens não têm OCR. Tarefas que exigem busca na web precisam de um backend compatível com as ferramentas de pesquisa.
+
+### Tectonic instalado no WSL2
+
+Se a API/worker roda no Windows e o Tectonic está instalado apenas no WSL2, o app tenta localizá-lo automaticamente na distro WSL padrão. Confirme no terminal:
+
+```powershell
+wsl --exec zsh -ic 'tectonic --version'
+```
+
+O comando deve retornar a versão do Tectonic. Instale-o na distro padrão (ou selecione como padrão a distro onde já está instalado) e reinicie o `tracker-dev` para o worker detectar a integração.
+
+### Opção B: Claude Code com a sua assinatura
 
 Sem custo além da assinatura Claude Pro/Max. Nada a colocar no `.env`.
 
@@ -101,7 +137,7 @@ Sem custo além da assinatura Claude Pro/Max. Nada a colocar no `.env`.
 
 Cada uso conta no limite da sua assinatura. Para poupar, a leitura em massa de vagas usa o Sonnet (`AI_MODEL_JOB_EXTRACT` no `.env`).
 
-### Opção B: chave da API da Anthropic (pago por uso)
+### Opção C: chave da API da Anthropic (pago por uso)
 
 1. Em [console.anthropic.com](https://console.anthropic.com), vá em **Billing** e coloque créditos (US$ 5–10 bastam para começar). Defina um limite mensal ali também.
 2. **API Keys → Create Key**. A chave começa com `sk-ant-` e só aparece uma vez.

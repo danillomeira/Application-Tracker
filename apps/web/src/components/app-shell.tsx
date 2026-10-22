@@ -27,7 +27,6 @@ import { useEffect, useState } from "react";
 import { api, rawFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useLiveEvents } from "@/lib/ws";
-import { AgentControl } from "./agent-control";
 import { ThemeToggle } from "./theme-toggle";
 import { PageTour, TourButton } from "./tour";
 import { EASE } from "./ui";
@@ -197,7 +196,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex-1" />
           <TourButton />
-          <AgentControl />
           <Link
             href="/config?tab=notificacoes"
             className="relative grid h-9 w-9 place-items-center rounded-lg transition-colors hover:bg-muted"

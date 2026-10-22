@@ -368,6 +368,10 @@ export function LatexGuide() {
                 Sem o Scoop? Baixe o .zip “x86_64-pc-windows-msvc” em <Ext href="https://github.com/tectonic-typesetting/tectonic/releases">releases do tectonic</Ext>{" "}
                 e coloque o <C>tectonic.exe</C> numa pasta do PATH.
               </p>
+              <p className="text-xs text-muted-foreground">
+                Se o app roda no Windows e o Tectonic está instalado no WSL2, ele é detectado na distro padrão. Verifique com{" "}
+                <C>wsl --exec zsh -ic &apos;tectonic --version&apos;</C> e reinicie o worker.
+              </p>
             </>
           ) : (
             <>

@@ -320,7 +320,8 @@ async def deterministic(
 
 
 CONDITIONAL = re.compile(
-    r"^(?:\d+\W*\s*)?(?:caso|se)\b.{0,40}\b(?:voce|vc)?\s*(?:seja|for|tenha|ja|trabalh|possu)|^(?:\d+\W*\s*)?if you (?:are|have|were|currently)"
+    r"^(?:\d+\W*\s*)?(?:caso|se)\b.{0,40}\b(?:voce|vc)?\s*(?:seja|for|tenha|ja|trabalh|possu)"
+    r"|^(?:\d+\W*\s*)?if you (?:are|have|were|currently)"
 )
 
 

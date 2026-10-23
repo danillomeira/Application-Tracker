@@ -17,16 +17,15 @@
   const state = {
     filling: false,
     cfg: null, card: null, pageInfo: null, fields: [], status: new Map(), edits: new Map(), reported: false,
-    busy: false, msg: "", minimized: false, logo: null, linkedinList: [],
+    busy: false, msg: "", minimized: false, logo: null,
   };
-  let linkedinDiscoveryRunning = false;
 
   // ---------------- comunicação ----------------
   const MESSAGE_MAX_RETRIES = 4;
   const MESSAGE_BACKOFF_BASE_MS = 250;
   const MESSAGE_BACKOFF_CAP_MS = 4000;
   const retryableMessage = (msg) =>
-    ["config", "linkedinDiscoveryInfo", "logo", "resume"].includes(msg.type)
+    ["config", "logo", "resume"].includes(msg.type)
     || (msg.type === "api" && msg.method === "GET");
   const transientMessageError = (error) => {
     const message = String(error?.message || error).toLowerCase();
@@ -480,9 +479,6 @@
       if (extra.length) body += `<div class="muted">${extra.join(" · ")}</div>`;
       if (s?.missing_must?.length) body += `<div class="muted">Você não tem: ${esc(s.missing_must.slice(0, 4).join(", "))}</div>`;
       if (c.application?.submitted_at) body += `<div class="msg ok">${ICON.check} Você já se candidatou a esta vaga.</div>`;
-    } else if (state.linkedinList.length) {
-      body += `<div class="sec"><h4>${state.linkedinList.length} vaga(s) nesta busca do LinkedIn</h4><div class="muted">Envie para a aba Vagas do tracker: elas recebem nota e você se candidata com o assistente.</div>
-        <div class="btns" style="margin-top:8px"><button class="b b1 grow" id="import">Importar para o tracker</button></div></div>`;
     } else if (state.pageInfo?.looks_like_job) {
       body += `<div class="sec"><h4>Vaga nova</h4><div class="muted">Ainda não está no seu tracker.</div><div class="btns" style="margin-top:8px"><button class="b b1 grow" id="an">Avaliar e salvar vaga</button></div></div>`;
     }
@@ -519,7 +515,6 @@
       addEventListener("mousemove", move, true); addEventListener("mouseup", up, true);
     };
     $("an")?.addEventListener("click", analyze);
-    $("import")?.addEventListener("click", importLinkedin);
     $("ai")?.addEventListener("click", aiFill);
     $("refill")?.addEventListener("click", () => { state.status.clear(); autoFill(false); });
     $("sent")?.addEventListener("click", () => reportSubmitted(true));
@@ -567,112 +562,6 @@
       loadLogo();
       render();
     } catch (e) { if (!silent) say(`Não foi possível avaliar: ${explainError(e)}`); }
-  }
-
-  // ---------------- LinkedIn: importar as vagas da busca ----------------
-  const isLinkedinSearch = () => /linkedin\.com\/jobs\/(?:search(?:-results)?|collections)(?:[/?#]|$)/i.test(location.href);
-  function scrapeLinkedin() {
-    const out = new Map();
-    const candidates = document.querySelectorAll(
-      'a[href*="/jobs/view/"], a[href*="currentJobId="], [data-job-id], [data-occludable-job-id]'
-    );
-    candidates.forEach((candidate) => {
-      const card = candidate.matches("a")
-        ? candidate.closest("li, .job-card-container, [data-job-id], [data-occludable-job-id]") || candidate.parentElement
-        : candidate;
-      const anchor = candidate.matches("a") ? candidate : card?.querySelector('a[href*="/jobs/view/"], a[href*="currentJobId="]');
-      if (!card || !anchor || !visible(card)) return;
-
-      const idSource = [candidate, card, anchor].map((el) =>
-        el.getAttribute("data-job-id") || el.getAttribute("data-occludable-job-id") || ""
-      ).find(Boolean) || "";
-      const href = anchor.href || "";
-      const id = href.match(/\/jobs\/view\/(\d+)/)?.[1]
-        || new URL(href, location.href).searchParams.get("currentJobId")
-        || idSource.match(/(\d{6,})/)?.[1];
-      if (!id || out.has(id)) return;
-
-      const titleNode = card.querySelector(
-        ".job-card-list__title, .job-card-container__link, [data-test-job-card-title]"
-      ) || anchor;
-      const title = (txt(titleNode) || titleNode.getAttribute("aria-label") || "")
-        .split("\n")[0].replace(/\s+with verification$/i, "").trim();
-      if (!title) return;
-
-      const cardText = card.innerText || "";
-      const lines = cardText.split("\n").map((s) => s.trim()).filter((s) => s && s !== title);
-      const company = txt(card.querySelector(
-        '[data-test-job-card-company-name], .artdeco-entity-lockup__subtitle, .job-card-container__primary-description, .job-card-container__company-name'
-      )) || lines.find((line) => !/easy apply|candidatura simplificada|promoted|patrocinad[oa]|actively hiring|contratando ativamente/i.test(line)) || "";
-      const location_ = txt(card.querySelector(
-        '[data-test-job-card-location], .job-card-container__metadata-item, .artdeco-entity-lockup__caption'
-      )) || lines.find((line) => line !== company) || "";
-      out.set(id, {
-        external_id: id,
-        title,
-        company,
-        location: location_,
-        easy_apply: /easy apply|candidatura simplificada/i.test(cardText),
-        text: cardText.slice(0, 1500),
-      });
-    });
-    return [...out.values()];
-  }
-  async function collectLinkedinJobs() {
-    const collected = new Map();
-    const rememberVisible = () => {
-      for (const job of scrapeLinkedin()) {
-        collected.set(job.external_id, job);
-        if (collected.size >= 200) break;
-      }
-    };
-    const firstCard = document.querySelector(
-      '.jobs-search-results-list li, .scaffold-layout__list li, [data-occludable-job-id], [data-job-id]'
-    );
-    const scrollableAncestors = [];
-    for (let node = firstCard?.parentElement; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
-      const style = getComputedStyle(node);
-      const range = node.scrollHeight - node.clientHeight;
-      if (range > 24 && /(auto|scroll)/.test(style.overflowY)) scrollableAncestors.push({ node, range });
-    }
-    const scroller = scrollableAncestors.sort((a, b) => b.range - a.range)[0]?.node ?? document.scrollingElement;
-    if (!scroller) return scrapeLinkedin();
-
-    let stableAtEnd = 0;
-    for (let page = 0; page < 60 && collected.size < 200; page++) {
-      rememberVisible();
-      const beforeCount = collected.size;
-      const beforeHeight = scroller.scrollHeight;
-      const beforeTop = scroller.scrollTop;
-      const step = Math.max(320, Math.floor(scroller.clientHeight * 0.72));
-      scroller.scrollTop = beforeTop + step;
-      if (scroller.scrollTop === beforeTop) {
-        const lastCard = document.querySelector(
-          '.jobs-search-results-list li:last-child, .scaffold-layout__list li:last-child, [data-occludable-job-id]:last-of-type, [data-job-id]:last-of-type'
-        );
-        lastCard?.scrollIntoView({ block: "end", behavior: "auto" });
-      }
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      rememberVisible();
-      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 24;
-      const madeProgress = collected.size > beforeCount || scroller.scrollHeight > beforeHeight;
-      stableAtEnd = atEnd && !madeProgress ? stableAtEnd + 1 : 0;
-      if (stableAtEnd >= 3) break;
-    }
-    return [...collected.values()];
-  }
-  async function importLinkedin() {
-    const jobs = await collectLinkedinJobs();
-    if (!jobs.length) return say("Não encontrei vagas na lista. Role a lista para carregar e tente de novo.");
-    say(`Importando ${jobs.length} vaga(s)…`);
-    try {
-      const r = await api("POST", "/import-list", { source: "linkedin", jobs });
-      const accepted = (Number(r.created) || 0) + (Number(r.existing) || 0);
-      if (accepted < jobs.length) {
-        throw new Error(`${accepted} de ${jobs.length} cartões foram aceitos. Verifique se o LinkedIn exibiu o nome da empresa nos cartões.`);
-      }
-      say(`✓ ${accepted} cartão(ões) coletado(s): ${r.created} novo(s) e ${r.existing} já conhecido(s). A extensão percorreu a lista carregada (limite de 200); abra Vagas → Descobrir para revisar e selecionar quais entram na Fila.`);
-    } catch (e) { say(`Erro ao importar: ${explainError(e)}`); }
   }
 
   // ---------------- sugestão ao clicar num campo ----------------
@@ -813,7 +702,6 @@
       scanTimer = setTimeout(() => {
         const s = session.get();
         if ((s.formSubmitted || state.edits.size || state.status.size || state.card) && SUCCESS.test(pageText())) { reportSubmitted(false); return; }
-        if (isLinkedinSearch()) { const n = scrapeLinkedin().length; if (n !== state.linkedinList.length) { state.linkedinList = scrapeLinkedin(); render(); } }
         // formulários em etapas: campos novos são preenchidos assim que aparecem
         const fresh = extractFields().filter((f) => !state.status.has(f.key));
         if (fresh.length && state.cfg?.autoFill !== false && (state.card || state.status.size || localLooksRelevant())) autoFill(true);
@@ -828,38 +716,6 @@
     state.cfg = await bg({ type: "config" }).catch(() => null);
     if (!state.cfg?.enabled || !state.cfg.token) return;
     if ((state.cfg.ignoredDomains || []).some((d) => location.host.includes(d))) return;
-    if (IS_TOP && isLinkedinSearch()) {
-      const discovery = await bg({ type: "linkedinDiscoveryInfo" }).catch(() => null);
-      if (discovery && !linkedinDiscoveryRunning) {
-        linkedinDiscoveryRunning = true;
-        let jobs = [];
-        let imported = { created: 0, existing: 0 };
-        jobs = await collectLinkedinJobs();
-        try {
-          if (!jobs.length) throw new Error("nenhuma vaga visível; verifique se a sessão do LinkedIn está conectada");
-          imported = await api("POST", "/import-list", { source: "linkedin", jobs });
-          const accepted = (Number(imported.created) || 0) + (Number(imported.existing) || 0);
-          if (accepted < jobs.length) {
-            throw new Error(`${accepted} de ${jobs.length} cartões foram aceitos. O LinkedIn pode não estar mostrando o nome da empresa nos demais cartões.`);
-          }
-          await bg({
-            type: "linkedinDiscoveryComplete",
-            count: jobs.length,
-            created: imported.created,
-            existing: imported.existing,
-          });
-        } catch (error) {
-          await bg({
-            type: "linkedinDiscoveryComplete",
-            count: jobs.length,
-            created: Number(imported.created) || 0,
-            existing: Number(imported.existing) || 0,
-            error: explainError(error),
-          });
-        }
-        return;
-      }
-    }
     if (!wired) {
       wired = true;
       document.addEventListener("focusin", onFocus, true);
@@ -873,12 +729,11 @@
     }
     if (SUCCESS.test(pageText()) && session.get().jobUrl) { await reportSubmitted(false); return; }
     state.fields = extractFields();
-    if (isLinkedinSearch()) state.linkedinList = scrapeLinkedin();
     const relevant = localLooksRelevant() || state.fields.some((f) => f.kind === "file" || /e-?mail|curr[ií]culo|resume|cv/i.test(f.label));
-    if (!relevant && !state.linkedinList.length) return;
+    if (!relevant) return;
     if (!IS_TOP && !state.fields.length) return;
     try { await classify(); } catch { state.pageInfo = { looks_like_job: false }; }
-    if (state.card || state.pageInfo?.looks_like_job || state.fields.length || state.linkedinList.length) render();
+    if (state.card || state.pageInfo?.looks_like_job || state.fields.length) render();
     if (state.fields.length && state.cfg.autoFill !== false) autoFill(false);
   }
 
@@ -893,7 +748,7 @@
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      state.card = null; state.pageInfo = null; state.reported = false; state.status.clear(); state.msg = ""; state.logo = null; state.linkedinList = [];
+      state.card = null; state.pageInfo = null; state.reported = false; state.status.clear(); state.msg = ""; state.logo = null;
       setTimeout(start, 1200);
     }
   }, 1000);

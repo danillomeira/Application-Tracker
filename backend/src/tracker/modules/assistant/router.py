@@ -6,9 +6,7 @@ import hashlib
 import hmac
 import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, Literal
-from urllib.parse import urlencode
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
@@ -26,7 +24,7 @@ from tracker.modules.applications.models import ApplicationAnswer
 from tracker.modules.applications.resolver import FormField, resolve_core
 from tracker.modules.assistant import service
 from tracker.modules.jobs import service as job_service
-from tracker.modules.jobs.models import Job, SavedSearch
+from tracker.modules.jobs.models import Job
 from tracker.modules.jobs.normalize import RawJob, detect_language, normalize_title
 from tracker.modules.jobs.schemas import JobNormalized
 from tracker.modules.notifications.service import notify
@@ -50,131 +48,6 @@ async def assistant_auth(request: Request, session: SessionDep, authorization: A
 
 
 Auth = Annotated[str, Depends(assistant_auth)]
-
-
-def linkedin_search_url(query: str, filters: dict[str, Any]) -> str:
-    params: list[tuple[str, str]] = [("keywords", query)]
-    country = str(filters.get("country") or "").strip()
-    if country:
-        params.append(("location", country))
-    work_models = filters.get("work_models") or []
-    work_type = {"onsite": "1", "remote": "2", "hybrid": "3"}
-    selected = [work_type[value] for value in work_models if value in work_type]
-    if len(selected) == 1:
-        params.append(("f_WT", selected[0]))
-    return f"https://www.linkedin.com/jobs/search/?{urlencode(params)}"
-
-
-class LinkedinDiscoveryCompleteIn(BaseModel):
-    status: Literal["completed", "failed"]
-    count: int = Field(default=0, ge=0, le=200)
-    created: int = Field(default=0, ge=0, le=200)
-    existing: int = Field(default=0, ge=0, le=200)
-    error: str | None = Field(default=None, max_length=300)
-
-
-@router.get("/discovery/status")
-async def linkedin_discovery_status(session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
-    """Estado seguro da extensão e da última busca do LinkedIn para exibir no dashboard."""
-    cfg = await settings_store.get(session, "extension")
-    state = cfg.get("linkedin_discovery") or {}
-    return {
-        "last_poll_at": state.get("last_poll_at"),
-        "last_result": state.get("last_result"),
-    }
-
-
-@router.get("/discovery/due")
-async def due_linkedin_discoveries(session: SessionDep, _auth: Auth) -> list[dict[str, str]]:
-    """Claim buscas LinkedIn agendadas para a extensão local."""
-    from tracker.modules.jobs.tasks import cron_due
-
-    now = datetime.now(UTC)
-    searches = (
-        await session.scalars(
-            select(SavedSearch)
-            .where(SavedSearch.is_active.is_(True))
-            .order_by(SavedSearch.created_at)
-            .with_for_update(skip_locked=True)
-        )
-    ).all()
-    due: list[dict[str, str]] = []
-    cfg = await settings_store.get(session, "extension")
-    state = cfg.get("linkedin_discovery") or {}
-    state["last_poll_at"] = now.isoformat()
-    active = state.get("last_result") or {}
-    if active.get("status") == "running":
-        try:
-            started_at = datetime.fromisoformat(str(active.get("started_at")))
-            if started_at.tzinfo is None:
-                started_at = started_at.replace(tzinfo=UTC)
-        except ValueError:
-            started_at = now - timedelta(minutes=10)
-        if now - started_at < timedelta(minutes=3):
-            await settings_store.put(session, "extension", {**cfg, "linkedin_discovery": state})
-            await session.commit()
-            return due
-        state["last_result"] = {
-            **active,
-            "status": "failed",
-            "completed_at": now.isoformat(),
-            "error": "A extensão não confirmou o resultado dentro do prazo.",
-        }
-    for search in searches:
-        if "linkedin" not in search.sources or not cron_due(search.schedule_cron, search.last_linkedin_run_at, now):
-            continue
-        search.last_linkedin_run_at = now
-        state["last_result"] = {
-            "search_id": str(search.id),
-            "search_name": search.name,
-            "status": "running",
-            "started_at": now.isoformat(),
-            "completed_at": None,
-            "count": 0,
-            "created": 0,
-            "existing": 0,
-            "error": None,
-        }
-        due.append(
-            {
-                "id": str(search.id),
-                "name": search.name,
-                "url": linkedin_search_url(search.query, search.filters),
-            }
-        )
-        break
-    await settings_store.put(session, "extension", {**cfg, "linkedin_discovery": state})
-    await session.commit()
-    return due
-
-
-@router.post("/discovery/{search_id}/complete")
-async def complete_linkedin_discovery(
-    search_id: uuid.UUID,
-    body: LinkedinDiscoveryCompleteIn,
-    session: SessionDep,
-    _auth: Auth,
-) -> dict[str, str]:
-    search = await session.get(SavedSearch, search_id)
-    if search is None:
-        raise HTTPException(404, "busca salva não encontrada")
-    cfg = await settings_store.get(session, "extension")
-    state = cfg.get("linkedin_discovery") or {}
-    current = state.get("last_result") or {}
-    if current.get("search_id") != str(search_id):
-        raise HTTPException(409, "esta busca não está aguardando resultado da extensão")
-    state["last_result"] = {
-        **current,
-        "status": body.status,
-        "completed_at": datetime.now(UTC).isoformat(),
-        "count": body.count,
-        "created": body.created,
-        "existing": body.existing,
-        "error": body.error if body.status == "failed" else None,
-    }
-    await settings_store.put(session, "extension", {**cfg, "linkedin_discovery": state})
-    await session.commit()
-    return {"status": body.status}
 
 
 @router.post("/token")
@@ -290,55 +163,6 @@ async def analyze(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]
     await score_and_route(sessionmaker_from(session), str(job.id))
     await session.refresh(job)
     return await service.job_card(session, job)
-
-
-class ListedJob(BaseModel):
-    external_id: str = Field(max_length=64)
-    title: str = Field(max_length=300)
-    company: str = Field(default="", max_length=200)
-    location: str | None = Field(default=None, max_length=200)
-    easy_apply: bool = False
-    text: str = Field(default="", max_length=3000)
-
-
-class ImportListIn(BaseModel):
-    source: str = Field(pattern="^linkedin$")
-    jobs: list[ListedJob] = Field(max_length=200)
-
-
-@router.post("/import-list")
-async def import_list(body: ImportListIn, session: SessionDep, _a: Auth) -> dict[str, int]:
-    """Vagas de uma lista de busca que VOCÊ abriu (ex.: LinkedIn): entram em Vagas e recebem nota.
-
-    Sem robô: a extensão só lê o que já está na sua tela. A descrição completa chega quando você abre a vaga."""
-    created = existing = 0
-    for item in body.jobs:
-        if not item.title.strip():
-            continue
-        company_missing = not item.company.strip()
-        url = f"https://www.linkedin.com/jobs/view/{item.external_id}/"
-        job, is_new = await job_service.upsert_job(
-            session,
-            RawJob(
-                source="linkedin",
-                external_id=item.external_id,
-                title=item.title.strip(),
-                company_name=item.company.strip() or "Empresa não informada",
-                url=url,
-                location=item.location,
-                description_text=item.text,
-                apply_url=url,
-                apply_kind="easy_apply" if item.easy_apply else "unknown",
-                raw={"company_missing": company_missing},
-            ),
-        )
-        await session.commit()
-        if is_new:
-            created += 1
-            dispatch("ai.process_job", job_id=str(job.id))
-        else:
-            existing += 1
-    return {"created": created, "existing": existing}
 
 
 @router.get("/logo")

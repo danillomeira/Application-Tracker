@@ -1,7 +1,7 @@
 "use client";
 
 import { CompanyLogo } from "@/components/brand";
-import { Ban, Briefcase, Check, ChevronLeft, ChevronRight, Clock3, Eye, Globe2, Linkedin, Plus, Radio, Search, SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
+import { Ban, Briefcase, Check, ChevronLeft, ChevronRight, Clock3, Eye, Globe2, Plus, Radio, Search, SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -46,21 +46,8 @@ type SearchFilters = Record<string, unknown> & {
   boards?: string[];
   custom_sources?: { name: string; url: string }[];
 };
-type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; last_linkedin_run_at: string | null; filters: SearchFilters };
+type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; filters: SearchFilters };
 type SearchInput = { name: string; query: string; sources: string[]; schedule_cron: string; filters: Record<string, unknown> };
-type LinkedinDiscoveryStatus = {
-  last_poll_at: string | null;
-  last_result: {
-    search_id: string;
-    search_name: string;
-    status: "running" | "completed" | "failed";
-    completed_at: string | null;
-    count: number;
-    created: number;
-    existing: number;
-    error: string | null;
-  } | null;
-};
 
 const DISCOVERY_PAGE_SIZE = 30;
 
@@ -133,7 +120,7 @@ function Discover() {
     query: "",
     country: "",
     workModel: "remote",
-    sources: ["boards", "linkedin"],
+    sources: ["boards"],
     boards: ["remotive", "remoteok", "himalayas", "jobicy", "arbeitnow", "workingnomads", "weworkremotely"],
     customSources: [] as { name: string; url: string }[],
     schedule_cron: "0 9,15 * * 1-5",
@@ -146,15 +133,6 @@ function Discover() {
   const queryClient = useQueryClient();
   const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const { data: savedSearches } = useGet<Search[]>(["searches"], "/api/v1/saved-searches");
-  const linkedinStatus = useGet<LinkedinDiscoveryStatus>(["linkedin-discovery-status"], "/api/v1/assistant/discovery/status", { refetchInterval: 30_000 });
-  const linkedinResult = linkedinStatus.data?.last_result;
-  const linkedinRefreshAt = linkedinResult
-    && (linkedinResult.status === "completed" || linkedinResult.created > 0 || linkedinResult.existing > 0)
-    ? linkedinResult.completed_at
-    : null;
-  useEffect(() => {
-    if (linkedinRefreshAt) void queryClient.invalidateQueries({ queryKey: ["keyword-search-jobs"] });
-  }, [linkedinRefreshAt, queryClient]);
   useEffect(() => {
     setDiscoveryPage(0);
   }, [form.query, form.country, form.workModel]);
@@ -275,7 +253,9 @@ function Discover() {
                 query: selected.query,
                 country: selected.filters.country ?? "",
                 workModel: selected.filters.work_models?.[0] ?? "",
-                sources: selected.sources,
+                sources: selected.sources.filter((source) => source !== "linkedin").length
+                  ? selected.sources.filter((source) => source !== "linkedin")
+                  : ["boards"],
                 boards: selected.filters.boards ?? [
                   "remotive", "remoteok", "himalayas", "jobicy", "arbeitnow", "workingnomads", "weworkremotely",
                 ],
@@ -324,7 +304,6 @@ function Discover() {
               <div className="grid gap-3 md:grid-cols-3">
                 {[
                   { id: "boards", title: "Sites públicos", detail: "Agregadores de vagas remotas", icon: Globe2 },
-                  { id: "linkedin", title: "LinkedIn", detail: "Busca pela extensão local", icon: Linkedin },
                   { id: "custom", title: "Meus sites", detail: "Boards de empresas escolhidos por você", icon: Plus },
                 ].map(({ id, title, detail, icon: Icon }) => {
                   const selected = form.sources.includes(id);
@@ -385,12 +364,6 @@ function Discover() {
                       );
                     })}
                   </div>
-                </div>
-              )}
-              {form.sources.includes("linkedin") && (
-                <div className="flex items-start gap-2.5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-xs leading-relaxed text-muted-foreground">
-                  <Linkedin size={15} className="mt-0.5 shrink-0 text-sky-600" />
-                  <p>O LinkedIn é consultado pela extensão local quando ela está ativa e configurada. Após iniciar a busca, a coleta começa em até 30 segundos. Entre no LinkedIn e role a lista para carregar mais cartões antes de importar.</p>
                 </div>
               )}
               {form.sources.includes("custom") && (
@@ -500,32 +473,6 @@ function Discover() {
               <div><p className="font-medium">Sites públicos</p><p className="mt-0.5 text-muted-foreground">Consultados pelo servidor assim que você inicia a busca.</p></div>
             </div>
           )}
-          {form.sources.includes("linkedin") && (() => {
-            const lastPoll = linkedinStatus.data?.last_poll_at ? Date.parse(linkedinStatus.data.last_poll_at) : NaN;
-            const connected = Number.isFinite(lastPoll) && Date.now() - lastPoll < 10 * 60_000;
-            const result = linkedinStatus.data?.last_result;
-            return (
-              <div className="space-y-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <Linkedin size={14} className="shrink-0 text-sky-600" />
-                  <p className="font-medium">LinkedIn</p>
-                  <Badge tone={connected ? "success" : "warning"}>{connected ? "extensão conectada" : "aguardando extensão"}</Badge>
-                </div>
-                {connected ? (
-                  <p className="text-muted-foreground">Última verificação da extensão: {formatDateTime(linkedinStatus.data?.last_poll_at ?? null)}.</p>
-                ) : (
-                  <p className="text-muted-foreground">A extensão ainda não consultou a API recentemente. Confira se ela está ativa, se o token foi salvo nas opções e se você está conectado ao LinkedIn. <a href="/config?tab=integracoes" className="font-medium text-primary underline">Ver configuração</a></p>
-                )}
-                {result && (
-                  <p className={result.status === "failed" ? "text-danger" : "text-muted-foreground"}>
-                    {result.status === "running" && `Buscando “${result.search_name}”…`}
-                    {result.status === "completed" && `“${result.search_name}”: ${result.count} cartão(ões) capturado(s) ao percorrer a lista — ${result.created} novo(s), ${result.existing} já conhecido(s). O LinkedIn pode ter mais resultados que os capturados.`}
-                    {result.status === "failed" && `“${result.search_name}” não foi concluída: ${result.error ?? "erro da extensão"}`}
-                  </p>
-                )}
-              </div>
-            );
-          })()}
         </div>
       </Card>
       <div>
@@ -1023,7 +970,6 @@ function Searches() {
   const sourceOptions = [
     { id: "monitored", title: "Empresas monitoradas", detail: "Boards das empresas da sua lista", icon: Briefcase },
     { id: "boards", title: "Sites públicos", detail: "Agregadores de vagas remotas", icon: Globe2 },
-    { id: "linkedin", title: "LinkedIn", detail: "Busca pela extensão local", icon: Linkedin },
   ];
   return (
     <div className="space-y-4">
@@ -1048,7 +994,7 @@ function Searches() {
             <h3 id="saved-search-sources-title" className="text-sm font-semibold">Fontes</h3>
             <p className="mt-1 text-xs text-muted-foreground">Escolha onde procurar as vagas desta busca.</p>
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2">
             {sourceOptions.map(({ id, title, detail, icon: Icon }) => {
               const selected = form.sources.includes(id);
               return (
@@ -1132,7 +1078,7 @@ function Searches() {
             <div className="flex flex-wrap gap-1.5">
               {s.sources.map((source) => (
                 <Badge key={source}>
-                  {source === "monitored" ? "Empresas monitoradas" : source === "boards" ? "Sites públicos" : source === "linkedin" ? "LinkedIn" : source}
+                  {source === "monitored" ? "Empresas monitoradas" : source === "boards" ? "Sites públicos" : source === "linkedin" ? "LinkedIn (desativado)" : source}
                 </Badge>
               ))}
               <span className="self-center text-xs text-muted-foreground">Última busca: {formatDateTime(s.last_run_at)}</span>

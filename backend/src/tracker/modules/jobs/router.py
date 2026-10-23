@@ -352,6 +352,11 @@ async def skip(job_id: uuid.UUID, session: SessionDep, _user: CurrentUser, reaso
 
 
 # ---------- Buscas salvas ----------
+def reject_linkedin_source(sources: list[str]) -> None:
+    if "linkedin" in sources:
+        raise HTTPException(422, "A busca automática do LinkedIn foi removida. Use sites públicos ou boards de empresas.")
+
+
 @searches_router.get("", response_model=list[SavedSearchOut])
 async def list_searches(session: SessionDep, _user: CurrentUser) -> list[SavedSearch]:
     return list((await session.scalars(select(SavedSearch).order_by(SavedSearch.name))).all())
@@ -361,6 +366,7 @@ async def list_searches(session: SessionDep, _user: CurrentUser) -> list[SavedSe
 async def create_search(body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
     from tracker.modules.jobs.tasks import cron_due
 
+    reject_linkedin_source(body.sources)
     try:
         cron_due(body.schedule_cron, None, __import__("datetime").datetime.now())
     except Exception as exc:
@@ -374,6 +380,7 @@ async def create_search(body: SavedSearchIn, session: SessionDep, _user: Current
 @searches_router.put("/{search_id}", response_model=SavedSearchOut)
 async def update_search(search_id: uuid.UUID, body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
     row = await get_or_404(session, SavedSearch, search_id)
+    reject_linkedin_source(body.sources)
     for k, v in body.model_dump().items():
         setattr(row, k, v)
     await session.commit()
@@ -390,8 +397,7 @@ async def delete_search(search_id: uuid.UUID, session: SessionDep, _user: Curren
 @searches_router.post("/{search_id}/run", response_model=TaskAccepted, status_code=202)
 async def run_search(search_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> TaskAccepted:
     search = await get_or_404(session, SavedSearch, search_id)
-    if "linkedin" in search.sources:
-        search.last_linkedin_run_at = None
-        await session.commit()
+    if not set(search.sources) - {"linkedin"}:
+        raise HTTPException(409, "Esta busca salva só tinha LinkedIn. Abra-a em Descobrir e escolha outra fonte.")
     task = await enqueue(session, "ingest.run_saved_search", search_id=str(search_id))
     return TaskAccepted(task_id=task.id)

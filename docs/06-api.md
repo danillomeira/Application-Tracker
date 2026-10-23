@@ -123,10 +123,8 @@ Convenções:
 | Método | Rota | Descrição |
 |---|---|---|
 | POST | `/assistant/token` | Gera o token de instalação da extensão (sessão do dashboard) |
-| GET | `/assistant/discovery/due` | Extensão consulta uma busca do LinkedIn no horário configurado (token da extensão) |
-| POST | `/assistant/discovery/{search_id}/complete` | Registra sucesso/erro e contagem importada (token da extensão) |
-| GET | `/assistant/discovery/status` | Estado recente da extensão e da última busca (sessão do dashboard) |
-| POST | `/assistant/import-list` | Importa os cartões da busca aberta pelo usuário (token da extensão) |
+
+A extensão não automatiza nem coleta resultados de busca do LinkedIn. Descoberta de vagas usa boards públicos, fontes ATS configuradas pelo usuário e empresas monitoradas.
 
 ## Webhooks
 | Rota | Origem |

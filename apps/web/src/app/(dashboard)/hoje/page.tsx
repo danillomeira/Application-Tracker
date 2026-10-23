@@ -31,7 +31,7 @@ type Today = {
   followups: { application_id: string; company: string; job_title: string; next_action: string | null; next_action_at: string | null }[];
   top_jobs: { job_id: string; title: string; company: string; quadrant: string; chance: number; attractiveness: number; action: string }[];
   quota: { used: number; limit: number };
-  agent: { running: boolean; queued: number; paused_until: string | null; last_safety_stop_at: string | null };
+  agent: { paused_until: string | null; last_safety_stop_at: string | null };
   stats: { applied_7d: number; responses_7d: number; new_jobs_7d: number };
   integration_errors: { name: string; error: string | null }[];
 };

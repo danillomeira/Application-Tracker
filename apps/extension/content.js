@@ -699,8 +699,13 @@
         }
         try {
           if (!jobs.length) throw new Error("nenhuma vaga visível; verifique se a sessão do LinkedIn está conectada");
-          await api("POST", "/import-list", { source: "linkedin", jobs });
-          await bg({ type: "linkedinDiscoveryComplete" });
+          const imported = await api("POST", "/import-list", { source: "linkedin", jobs });
+          await bg({
+            type: "linkedinDiscoveryComplete",
+            count: jobs.length,
+            created: imported.created,
+            existing: imported.existing,
+          });
         } catch (error) {
           await bg({ type: "linkedinDiscoveryComplete", error: error.message });
         }

@@ -2,6 +2,7 @@
 const DEFAULTS = { apiUrl: "http://localhost:8000", token: "", enabled: true, autoFill: true, ignoredDomains: ["mail.google.com", "web.whatsapp.com", "localhost:3100"] };
 const logos = new Map(); // cache por empresa durante a sessão do navegador
 const DISCOVERY_ALARM = "tracker-linkedin-discovery";
+const DISCOVERY_TIMEOUT_PREFIX = "tracker-linkedin-timeout-";
 
 async function config() {
   const c = await chrome.storage.sync.get(DEFAULTS);
@@ -34,7 +35,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       }
       if (msg.type === "linkedinDiscoveryComplete") {
         const tabId = _sender.tab?.id;
-        if (tabId != null) await finishDiscovery(tabId, msg.error);
+        if (tabId != null) await finishDiscovery(tabId, msg);
         return reply({ ok: true, data: null });
       }
       if (msg.type === "config") return reply({ ok: true, data: await config() });
@@ -67,12 +68,30 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   return true;
 });
 
-async function finishDiscovery(tabId, error) {
+async function reportDiscovery(search, result) {
+  if (!search?.id) return;
+  await api("POST", `/discovery/${encodeURIComponent(search.id)}/complete`, result).catch((error) => {
+    console.error("Could not report LinkedIn discovery result:", error);
+  });
+}
+
+async function finishDiscovery(tabId, result = {}) {
   const { discoveryTabs = {} } = await chrome.storage.local.get("discoveryTabs");
+  const search = discoveryTabs[String(tabId)];
+  if (!search) return;
   delete discoveryTabs[String(tabId)];
   await chrome.storage.local.set({ discoveryTabs });
-  if (error) {
-    console.error("LinkedIn discovery failed:", error);
+  await chrome.alarms.clear(`${DISCOVERY_TIMEOUT_PREFIX}${tabId}`);
+  const failed = Boolean(result.error);
+  await reportDiscovery(search, {
+    status: failed ? "failed" : "completed",
+    count: Number(result.count) || 0,
+    created: Number(result.created) || 0,
+    existing: Number(result.existing) || 0,
+    ...(failed && { error: String(result.error).slice(0, 300) }),
+  });
+  if (failed) {
+    console.error("LinkedIn discovery failed:", result.error);
     await chrome.action.setBadgeText({ text: "!" });
     await chrome.action.setBadgeBackgroundColor({ color: "#dc2626" });
   } else {
@@ -89,10 +108,19 @@ async function pollLinkedinDiscoveries() {
     const searches = await res.json();
     const { discoveryTabs = {} } = await chrome.storage.local.get("discoveryTabs");
     for (const search of searches) {
-      const tab = await chrome.tabs.create({ url: search.url, active: false });
-      discoveryTabs[String(tab.id)] = search;
+      let tab;
+      try {
+        // Registra a busca antes de navegar para não perder a associação se o content script iniciar rápido.
+        tab = await chrome.tabs.create({ url: "about:blank", active: false });
+        discoveryTabs[String(tab.id)] = search;
+        await chrome.storage.local.set({ discoveryTabs });
+        await chrome.alarms.create(`${DISCOVERY_TIMEOUT_PREFIX}${tab.id}`, { delayInMinutes: 2 });
+        await chrome.tabs.update(tab.id, { url: search.url });
+      } catch (error) {
+        if (tab?.id != null) await finishDiscovery(tab.id, { error: String(error.message || error) });
+        else await reportDiscovery(search, { status: "failed", error: String(error.message || error) });
+      }
     }
-    await chrome.storage.local.set({ discoveryTabs });
   } catch (error) {
     if (!String(error.message).includes("Configure o token")) console.error("LinkedIn discovery polling failed:", error);
   }
@@ -100,14 +128,41 @@ async function pollLinkedinDiscoveries() {
 
 function ensureDiscoveryAlarm() {
   void chrome.alarms.get(DISCOVERY_ALARM).then((alarm) => {
-    if (!alarm) chrome.alarms.create(DISCOVERY_ALARM, { periodInMinutes: 5 });
+    if (alarm?.periodInMinutes !== 0.5) {
+      chrome.alarms.create(DISCOVERY_ALARM, { periodInMinutes: 0.5 });
+    }
   });
 }
 
 ensureDiscoveryAlarm();
 chrome.runtime.onInstalled.addListener(ensureDiscoveryAlarm);
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "sync" && ["apiUrl", "enabled", "token"].some((key) => key in changes)) {
+    void pollLinkedinDiscoveries();
+  }
+});
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DISCOVERY_ALARM) void pollLinkedinDiscoveries();
+  else if (alarm.name.startsWith(DISCOVERY_TIMEOUT_PREFIX)) {
+    const tabId = Number(alarm.name.slice(DISCOVERY_TIMEOUT_PREFIX.length));
+    if (Number.isInteger(tabId)) void finishDiscovery(tabId, { error: "A página do LinkedIn demorou demais para responder." });
+  }
+});
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !tab.url) return;
+  if (/linkedin\.com\/jobs\/(search|collections)/i.test(tab.url)) return;
+  void chrome.storage.local.get("discoveryTabs").then(({ discoveryTabs = {} }) => {
+    if (discoveryTabs[String(tabId)]) {
+      void finishDiscovery(tabId, { error: "O LinkedIn redirecionou para login ou outra página. Entre na sua conta e tente novamente." });
+    }
+  });
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void chrome.storage.local.get("discoveryTabs").then(({ discoveryTabs = {} }) => {
+    if (discoveryTabs[String(tabId)]) {
+      void finishDiscovery(tabId, { error: "A aba de busca do LinkedIn foi fechada antes da importação." });
+    }
+  });
 });
 chrome.runtime.onStartup.addListener(() => {
   ensureDiscoveryAlarm();

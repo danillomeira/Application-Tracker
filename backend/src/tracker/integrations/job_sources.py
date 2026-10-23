@@ -421,7 +421,9 @@ async def board_himalayas(query: str, transport: httpx.AsyncBaseTransport | None
 
 async def board_jobicy(query: str, transport: httpx.AsyncBaseTransport | None = None) -> list[RawJob]:
     tag = query.split("|")[0].strip()
-    data = await _get_json("https://jobicy.com/api/v2/remote-jobs", {"count": 50, "tag": tag}, transport)
+    if tag.casefold() == "go":
+        tag = "golang"
+    data = await _get_json("https://jobicy.com/api/jobs", {"count": 50, "tag": tag}, transport)
     return [
         RawJob(
             source="jobicy",

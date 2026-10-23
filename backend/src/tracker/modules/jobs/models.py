@@ -44,7 +44,7 @@ class Job(IdMixin, TimestampMixin, Base):
     posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     applicants_count: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(Text, default="open", index=True)
-    triage: Mapped[str] = mapped_column(Text, default="new", index=True)  # new|approved|skipped
+    triage: Mapped[str] = mapped_column(Text, default="discovered", index=True)  # discovered|new|approved|skipped
     canonical_url: Mapped[str | None] = mapped_column(Text)
     description_text: Mapped[str] = mapped_column(Text, default="")
     recruiter: Mapped[dict[str, Any] | None]

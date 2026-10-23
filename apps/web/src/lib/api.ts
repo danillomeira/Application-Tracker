@@ -51,7 +51,15 @@ export async function rawFetch(path: string, init?: RequestInit) {
     let message = `Erro ${res.status}`;
     try {
       const body = await res.json();
-      message = body?.error?.message ?? message;
+      const apiError = body?.error;
+      const validationErrors = apiError?.details?.errors;
+      const reasons = Array.isArray(validationErrors)
+        ? validationErrors
+            .map((item: { msg?: unknown }) => (typeof item?.msg === "string" ? item.msg.replace(/^Value error,\s*/i, "") : ""))
+            .filter(Boolean)
+        : [];
+      const summary = typeof apiError?.message === "string" ? apiError.message : message;
+      message = reasons.length ? `${summary}: ${reasons.join("; ")}` : summary;
     } catch {}
     throw new ApiError(message, res.status);
   }

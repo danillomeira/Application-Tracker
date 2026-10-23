@@ -23,6 +23,31 @@ from tracker.modules.profile.models import AnswerBankEntry
 H = {"Authorization": "Extension tok"}
 
 
+async def test_only_selected_discoveries_enter_the_new_jobs_queue(client: AsyncClient, session) -> None:
+    first, _ = await job_service.upsert_job(
+        session,
+        RawJob(source="greenhouse", external_id="selection-1", title="Backend Engineer", company_name="Globex",
+               url="https://boards.greenhouse.io/globex/jobs/selection-1"),
+    )
+    second, _ = await job_service.upsert_job(
+        session,
+        RawJob(source="greenhouse", external_id="selection-2", title="Data Engineer", company_name="Globex",
+               url="https://boards.greenhouse.io/globex/jobs/selection-2"),
+    )
+    await session.commit()
+
+    response = await client.post("/api/v1/jobs/select", json={"job_ids": [str(first.id)]})
+
+    assert response.status_code == 200
+    assert response.json() == {"selected": 1}
+    await session.refresh(first)
+    await session.refresh(second)
+    assert first.triage == "new"
+    assert second.triage == "discovered"
+    repeated = await client.post("/api/v1/jobs/select", json={"job_ids": [str(first.id)]})
+    assert repeated.status_code == 409
+
+
 def test_linkedin_search_url_includes_independent_location_and_remote_filters() -> None:
     url = linkedin_search_url("backend Go", {"country": "United States", "work_models": ["remote"]})
     assert "keywords=backend+Go" in url
@@ -50,6 +75,39 @@ async def test_linkedin_discovery_claims_scheduled_search_once(anon_client: Asyn
     assert first.json()[0]["id"] == str(search.id)
     assert "location=United+States" in first.json()[0]["url"]
     assert second.json() == []
+
+
+async def test_linkedin_discovery_reports_extension_and_import_status(
+    anon_client: AsyncClient, client: AsyncClient, session
+) -> None:
+    await _auth(session)
+    search = SavedSearch(
+        name="Backend US",
+        query="backend Go",
+        filters={},
+        sources=["linkedin"],
+        schedule_cron="0 0 * * *",
+        is_active=True,
+    )
+    session.add(search)
+    await session.commit()
+
+    claim = await anon_client.get("/api/v1/assistant/discovery/due", headers=H)
+    assert claim.status_code == 200
+    running = (await client.get("/api/v1/assistant/discovery/status")).json()
+    assert running["last_poll_at"]
+    assert running["last_result"]["status"] == "running"
+    assert running["last_result"]["search_id"] == str(search.id)
+
+    completed = await anon_client.post(
+        f"/api/v1/assistant/discovery/{search.id}/complete",
+        headers=H,
+        json={"status": "completed", "count": 8, "created": 5, "existing": 3},
+    )
+    assert completed.status_code == 200
+    result = (await client.get("/api/v1/assistant/discovery/status")).json()["last_result"]
+    assert result["status"] == "completed"
+    assert result["count"] == 8 and result["created"] == 5 and result["existing"] == 3
 
 
 async def test_run_saved_search_returns_trackable_task_and_requeues_linkedin(

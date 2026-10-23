@@ -59,7 +59,19 @@ export function formatSalary(s: JobRow["salary"]): string | null {
 const QUADRANT_ICON: Record<string, React.ComponentType<{ size?: number }>> = { top: Flame, bet: Target, volume: Layers, discard: Archive, blocked: Ban };
 
 /** Cartão enxuto da vaga: o essencial com ícones. Clicar abre o painel com detalhes e o próximo passo. */
-export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: JobRow) => void; onTech?: (tech: string) => void }) {
+export function JobCard({
+  job,
+  onOpen,
+  onTech,
+  selected = false,
+  onSelect,
+}: {
+  job: JobRow;
+  onOpen?: (job: JobRow) => void;
+  onTech?: (tech: string) => void;
+  selected?: boolean;
+  onSelect?: (job: JobRow) => void;
+}) {
   const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, { success: "Vaga descartada", invalidate: [["jobs"], ["dashboard"], ["facets"]] });
   const s = job.score;
   const salary = formatSalary(job.salary);
@@ -73,7 +85,10 @@ export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: J
       tabIndex={0}
       onClick={open}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open())}
-      className="group flex h-full cursor-pointer flex-col gap-3"
+      className={cn(
+        "group flex h-full cursor-pointer flex-col gap-3",
+        selected && "border-primary ring-1 ring-primary/25",
+      )}
       aria-label={`${job.title} na ${job.company_name}. Abrir detalhes`}
     >
       <div className="flex items-start gap-3">
@@ -84,18 +99,41 @@ export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: J
             {job.company_name} · {relativeTime(job.posted_at ?? job.first_seen_at)}
           </p>
         </div>
-        {s && (
-          <Tooltip label={`Match ${Math.round(s.priority)} · ${QUADRANT_LABEL[s.quadrant]}. Combina chance de ser chamado e quanto a vaga vale a pena.`}>
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold",
-                { success: "bg-success/12 text-success", primary: "bg-accent text-primary", warning: "bg-warning/12 text-warning", danger: "bg-danger/12 text-danger", neutral: "bg-muted text-muted-foreground" }[QUADRANT_TONE[s.quadrant] ?? "neutral"],
-              )}
-            >
-              {QIcon && <QIcon size={13} />} {Math.round(s.priority)}
-            </span>
-          </Tooltip>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {onSelect && (
+            <Tooltip label={selected ? "Remover da Fila" : "Selecionar para a Fila"}>
+              <button
+                type="button"
+                aria-label={selected ? "Remover da Fila" : "Selecionar para a Fila"}
+                aria-pressed={selected}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(job);
+                }}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors",
+                  selected
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:bg-accent hover:text-primary",
+                )}
+              >
+                <Check size={14} /> {selected ? "Selecionada" : "Selecionar"}
+              </button>
+            </Tooltip>
+          )}
+          {s && (
+            <Tooltip label={`Match ${Math.round(s.priority)} · ${QUADRANT_LABEL[s.quadrant]}. Combina chance de ser chamado e quanto a vaga vale a pena.`}>
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold",
+                  { success: "bg-success/12 text-success", primary: "bg-accent text-primary", warning: "bg-warning/12 text-warning", danger: "bg-danger/12 text-danger", neutral: "bg-muted text-muted-foreground" }[QUADRANT_TONE[s.quadrant] ?? "neutral"],
+                )}
+              >
+                {QIcon && <QIcon size={13} />} {Math.round(s.priority)}
+              </span>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

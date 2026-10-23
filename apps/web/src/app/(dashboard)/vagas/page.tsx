@@ -1,7 +1,7 @@
 "use client";
 
 import { CompanyLogo } from "@/components/brand";
-import { Briefcase, Search, SlidersHorizontal, X } from "lucide-react";
+import { Ban, Briefcase, Check, Clock3, Eye, Globe2, Linkedin, Plus, Radio, Search, SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -12,6 +12,7 @@ import {
   Badge,
   Button,
   Card,
+  Chip,
   EmptyState,
   Field,
   Input,
@@ -47,9 +48,56 @@ type SearchFilters = Record<string, unknown> & {
 };
 type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; last_linkedin_run_at: string | null; filters: SearchFilters };
 type SearchInput = { name: string; query: string; sources: string[]; schedule_cron: string; filters: Record<string, unknown> };
+type LinkedinDiscoveryStatus = {
+  last_poll_at: string | null;
+  last_result: {
+    search_id: string;
+    search_name: string;
+    status: "running" | "completed" | "failed";
+    completed_at: string | null;
+    count: number;
+    created: number;
+    existing: number;
+    error: string | null;
+  } | null;
+};
+
+const COMPANY_FLAGS = [
+  { key: "is_monitored", label: "Monitorar vagas", icon: Radio, active: "bg-primary" },
+  { key: "is_watchlisted", label: "Empresa favorita", icon: Star, active: "bg-amber-500" },
+  { key: "is_blocked", label: "Bloquear vagas", icon: Ban, active: "bg-danger" },
+] as const;
+
+const SCHEDULE_PRESETS = [
+  { cron: "0 9,15 * * 1-5", label: "2 vezes por dia", detail: "Dias úteis, às 9h e 15h" },
+  { cron: "0 9 * * 1-5", label: "1 vez por dia", detail: "Dias úteis, às 9h" },
+  { cron: "0 9 * * *", label: "Todos os dias", detail: "Diariamente, às 9h" },
+  { cron: "0 9 * * 1", label: "1 vez por semana", detail: "Segundas-feiras, às 9h" },
+];
+
+function scheduleLabel(cron: string) {
+  return SCHEDULE_PRESETS.find((preset) => preset.cron === cron)?.label ?? "Agenda personalizada";
+}
 
 export default function JobsPage() {
-  const [tab, setTab] = useState<"vagas" | "empresas" | "buscas" | "buscar">("vagas");
+  return <Suspense fallback={<Skeleton className="h-96" />}><JobsPageContent /></Suspense>;
+}
+
+type JobsTab = "vagas" | "empresas" | "buscas" | "buscar";
+
+function JobsPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("view");
+  const tab: JobsTab = tabParam === "buscar" || tabParam === "empresas" || tabParam === "buscas" ? tabParam : "vagas";
+  const setTab = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === "vagas") params.delete("view");
+    else params.set("view", value);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
   return (
     <div>
       <PageHeader
@@ -59,7 +107,7 @@ export default function JobsPage() {
         actions={<span data-tour="import"><ImportButton /></span>}
       />
       <div data-tour="tabs" className="inline-block">
-        <Tabs value={tab} onChange={setTab} items={[{ value: "vagas", label: "Vagas" }, { value: "buscar", label: "Buscar vagas" }, { value: "empresas", label: "Empresas (ATS)" }, { value: "buscas", label: "Buscas salvas" }]} />
+        <Tabs value={tab} onChange={setTab} items={[{ value: "vagas", label: "Fila" }, { value: "buscar", label: "Descobrir" }, { value: "empresas", label: "Empresas" }, { value: "buscas", label: "Buscas salvas" }]} />
       </div>
       {tab === "vagas" && (
         <Suspense fallback={<Skeleton className="h-96" />}>
@@ -91,24 +139,61 @@ function Discover() {
   const [customSourceName, setCustomSourceName] = useState("");
   const [customSourceUrl, setCustomSourceUrl] = useState("");
   const [selectedSearchId, setSelectedSearchId] = useState("");
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const { data: savedSearches } = useGet<Search[]>(["searches"], "/api/v1/saved-searches");
+  const linkedinStatus = useGet<LinkedinDiscoveryStatus>(["linkedin-discovery-status"], "/api/v1/assistant/discovery/status", { refetchInterval: 30_000 });
+  const linkedinCompletedAt = linkedinStatus.data?.last_result?.status === "completed"
+    ? linkedinStatus.data.last_result.completed_at
+    : null;
+  useEffect(() => {
+    if (linkedinCompletedAt) void queryClient.invalidateQueries({ queryKey: ["keyword-search-jobs"] });
+  }, [linkedinCompletedAt, queryClient]);
   const create = useSend<SearchInput, Search>("POST", "/api/v1/saved-searches", { success: "Busca salva", invalidate: [["searches"]] });
   const update = useSend<{ id: string; body: SearchInput }, Search>("PUT", (value) => `/api/v1/saved-searches/${value.id}`, { success: "Busca atualizada", invalidate: [["searches"]] });
   const run = useSend<string, { task_id: string }>("POST", (id) => `/api/v1/saved-searches/${id}/run`);
+  const selectJobs = useSend<{ job_ids: string[] }, { selected: number }>("POST", "/api/v1/jobs/select", {
+    success: "Vagas selecionadas enviadas para a fila",
+    invalidate: [["jobs"], ["dashboard"], ["facets"], ["keyword-search-jobs"]],
+  });
   const task = useTask(() => {
     void queryClient.invalidateQueries({ queryKey: ["keyword-search-jobs"] });
     void queryClient.invalidateQueries({ queryKey: ["discovery-suggestions"] });
   });
-  const jobParams = new URLSearchParams({ status: "open", triage: "new", sort: "recent", limit: "30" });
+  const jobParams = new URLSearchParams({ status: "open", triage: "discovered", sort: "recent", limit: "30" });
   if (form.query.trim()) jobParams.set("q", form.query.trim());
   if (form.country.trim()) jobParams.set("location", form.country.trim());
   if (form.workModel) jobParams.set("work_model", form.workModel);
   const matchingJobs = useGet<JobRow[]>(
     ["keyword-search-jobs", jobParams.toString()],
-    form.query.trim() ? `/api/v1/jobs?${jobParams}` : null,
+    `/api/v1/jobs?${jobParams}`,
   );
+  const visibleJobs = matchingJobs.data ?? [];
+  const allVisibleSelected = visibleJobs.length > 0 && visibleJobs.every((job) => selectedJobIds.includes(job.id));
+  const toggleJobSelection = (jobId: string) => {
+    if (!selectedJobIds.includes(jobId) && selectedJobIds.length >= 200) {
+      toast.error("Você pode enviar até 200 vagas por vez para a Fila.");
+      return;
+    }
+    setSelectedJobIds((current) => current.includes(jobId) ? current.filter((id) => id !== jobId) : [...current, jobId]);
+  };
+  const toggleVisibleJobs = () => {
+    if (allVisibleSelected) {
+      setSelectedJobIds((current) => current.filter((id) => !visibleJobs.some((job) => job.id === id)));
+      return;
+    }
+    const additions = visibleJobs.filter((job) => !selectedJobIds.includes(job.id));
+    if (selectedJobIds.length + additions.length > 200) {
+      toast.error("Você pode enviar até 200 vagas por vez para a Fila.");
+      return;
+    }
+    setSelectedJobIds((current) => [...new Set([...current, ...additions.map((job) => job.id)])]);
+  };
+  const submitSelectedJobs = async () => {
+    await selectJobs.mutateAsync({ job_ids: selectedJobIds });
+    setSelectedJobIds([]);
+  };
   const toggle = (items: string[], item: string) =>
     items.includes(item) ? items.filter((value) => value !== item) : [...items, item];
   const addCustomSource = () => {
@@ -158,7 +243,7 @@ function Discover() {
             Digite palavras-chave para filtrar as sugestões existentes ou buscar novas vagas nas fontes escolhidas.
           </p>
         </div>
-        <Field label="Editar uma busca salva">
+        <Field label="Carregar busca salva" hint="Edite os critérios e execute novamente.">
           <Select
             value={selectedSearchId}
             onChange={(e) => {
@@ -193,59 +278,186 @@ function Discover() {
               <option value="">Qualquer modalidade</option><option value="remote">Remoto</option><option value="hybrid">Híbrido</option><option value="onsite">Presencial</option>
             </Select>
           </Field>
-          <Field label="Nome opcional da busca"><Input placeholder="Usa as palavras-chave se ficar vazio" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Agenda para repetir automaticamente (cron)"><Input value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} /></Field>
         </div>
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Fontes</p>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("boards")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "boards") })} /> Sites públicos</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("linkedin")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "linkedin") })} /> LinkedIn (extensão local)</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("custom")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "custom") })} /> Meus sites</label>
-          </div>
-          {form.sources.includes("boards") && (
-            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-              {boards.map(([id, label]) => <label key={id} className="flex items-center gap-2"><input type="checkbox" checked={form.boards.includes(id)} onChange={() => setForm({ ...form, boards: toggle(form.boards, id) })} />{label}</label>)}
-            </div>
-          )}
-          <div className="space-y-2 rounded-lg border p-3">
-            <p className="text-sm font-medium">Adicionar site de vagas</p>
-            <p className="text-xs text-muted-foreground">
-              Cole o link público do board Greenhouse, Lever, Ashby ou Gupy. Ex.: https://jobs.lever.co/empresa.
-              Sites genéricos ainda não são suportados.
-            </p>
-            <div className="grid gap-2 md:grid-cols-[1fr_2fr_auto]">
-              <Input placeholder="Nome da empresa ou site" value={customSourceName} onChange={(e) => setCustomSourceName(e.target.value)} />
-              <Input type="url" placeholder="https://boards.greenhouse.io/empresa" value={customSourceUrl} onChange={(e) => setCustomSourceUrl(e.target.value)} />
-              <Button type="button" variant="outline" onClick={addCustomSource}>Adicionar</Button>
-            </div>
-            {form.customSources.length > 0 && (
-              <ul className="space-y-1">
-                {form.customSources.map((source, index) => (
-                  <li key={`${source.url}-${index}`} className="flex items-center gap-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate">{source.name} <span className="text-muted-foreground">· {source.url}</span></span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Remover fonte ${source.name}`}
-                      onClick={() => {
-                        const customSources = form.customSources.filter((_, i) => i !== index);
-                        setForm({
-                          ...form,
-                          customSources,
-                          sources: customSources.length ? form.sources : form.sources.filter((source) => source !== "custom"),
-                        });
-                      }}
+        <details className="group overflow-hidden rounded-2xl border bg-card shadow-[var(--shadow-soft)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 transition-colors hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Sparkles size={18} /></span>
+              <span className="min-w-0">
+                <span className="block font-semibold">Fontes e recorrência</span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  Escolha onde buscar e quando atualizar os resultados automaticamente.
+                </span>
+              </span>
+            </span>
+            <span className="hidden shrink-0 items-center gap-2 sm:flex">
+              <Badge tone="primary">{form.sources.length} {form.sources.length === 1 ? "fonte" : "fontes"}</Badge>
+              <Badge>{scheduleLabel(form.schedule_cron)}</Badge>
+            </span>
+          </summary>
+          <div className="space-y-6 border-t p-4 md:p-5">
+            <section className="space-y-3" aria-labelledby="search-sources-title">
+              <div>
+                <h3 id="search-sources-title" className="text-sm font-semibold">Onde procurar</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Selecione uma ou mais fontes para esta busca.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                {[
+                  { id: "boards", title: "Sites públicos", detail: "Agregadores de vagas remotas", icon: Globe2 },
+                  { id: "linkedin", title: "LinkedIn", detail: "Busca pela extensão local", icon: Linkedin },
+                  { id: "custom", title: "Meus sites", detail: "Boards de empresas escolhidos por você", icon: Plus },
+                ].map(({ id, title, detail, icon: Icon }) => {
+                  const selected = form.sources.includes(id);
+                  return (
+                    <label
+                      key={id}
+                      className={`relative flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all ${
+                        selected ? "border-primary/50 bg-primary/5 shadow-sm" : "hover:border-primary/30 hover:bg-muted/30"
+                      }`}
                     >
-                      <X size={14} />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <input
+                        type="checkbox"
+                        className="peer sr-only"
+                        checked={selected}
+                        onChange={() => setForm({ ...form, sources: toggle(form.sources, id) })}
+                      />
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        <Icon size={17} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium">{title}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{detail}</span>
+                      </span>
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent"} peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40`}>
+                        <Check size={13} strokeWidth={3} />
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {form.sources.includes("boards") && (
+                <div className="rounded-xl border bg-muted/20 p-3.5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">Agregadores públicos</p>
+                    <span className="text-xs text-muted-foreground">{form.boards.length} de {boards.length} selecionados</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {boards.map(([id, label]) => {
+                      const selected = form.boards.includes(id);
+                      return (
+                        <label
+                          key={id}
+                          className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                            selected ? "border-primary/40 bg-primary/10 text-primary" : "bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={selected}
+                            onChange={() => setForm({ ...form, boards: toggle(form.boards, id) })}
+                          />
+                          <span className={`grid h-4 w-4 place-items-center rounded border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent"}`}>
+                            <Check size={11} strokeWidth={3} />
+                          </span>
+                          {label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {form.sources.includes("linkedin") && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-xs leading-relaxed text-muted-foreground">
+                  <Linkedin size={15} className="mt-0.5 shrink-0 text-sky-600" />
+                  <p>O LinkedIn é consultado pela extensão local quando ela está ativa e configurada. Após iniciar a busca, a coleta começa em até 30 segundos. Entre no LinkedIn e role a lista para carregar mais cartões antes de importar.</p>
+                </div>
+              )}
+              {form.sources.includes("custom") && (
+                <div className="space-y-3 rounded-xl border p-3.5">
+                  <div>
+                    <p className="text-sm font-medium">Seus boards de vagas</p>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      Adicione um board público Greenhouse, Lever, Ashby ou Gupy. Sites genéricos ainda não são suportados.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+                    <Input aria-label="Nome do site ou empresa" placeholder="Empresa ou site" value={customSourceName} onChange={(e) => setCustomSourceName(e.target.value)} />
+                    <Input aria-label="URL pública do board" type="url" placeholder="https://jobs.lever.co/empresa" value={customSourceUrl} onChange={(e) => setCustomSourceUrl(e.target.value)} />
+                    <Button type="button" variant="outline" onClick={addCustomSource}><Plus size={15} /> Adicionar</Button>
+                  </div>
+                  {form.customSources.length > 0 && (
+                    <ul className="divide-y rounded-lg border">
+                      {form.customSources.map((source, index) => (
+                        <li key={`${source.url}-${index}`} className="flex min-w-0 items-center gap-3 px-3 py-2.5">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><Globe2 size={15} /></span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{source.name}</span>
+                            <span className="block truncate text-xs text-muted-foreground">{source.url}</span>
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Remover fonte ${source.name}`}
+                            onClick={() => {
+                              const customSources = form.customSources.filter((_, i) => i !== index);
+                              setForm({
+                                ...form,
+                                customSources,
+                                sources: customSources.length ? form.sources : form.sources.filter((source) => source !== "custom"),
+                              });
+                            }}
+                          >
+                            <X size={15} />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3 border-t pt-5" aria-labelledby="search-schedule-title">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-primary"><Clock3 size={17} /></span>
+                <div>
+                  <h3 id="search-schedule-title" className="text-sm font-semibold">Quando repetir</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">A busca é executada automaticamente enquanto estiver ativa.</p>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+                <Field label="Frequência">
+                  <Select
+                    value={SCHEDULE_PRESETS.some((preset) => preset.cron === form.schedule_cron) ? form.schedule_cron : "custom"}
+                    onChange={(e) => {
+                      const preset = SCHEDULE_PRESETS.find((option) => option.cron === e.target.value);
+                      if (preset) setForm({ ...form, schedule_cron: preset.cron });
+                    }}
+                  >
+                    {SCHEDULE_PRESETS.map((preset) => <option key={preset.cron} value={preset.cron}>{preset.label} · {preset.detail}</option>)}
+                    <option value="custom">Personalizada</option>
+                  </Select>
+                </Field>
+                <div className="flex items-end">
+                  {SCHEDULE_PRESETS.find((preset) => preset.cron === form.schedule_cron) ? (
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      {SCHEDULE_PRESETS.find((preset) => preset.cron === form.schedule_cron)?.detail}. Horários no fuso configurado para sua conta.
+                    </p>
+                  ) : (
+                    <Field label="Expressão cron" hint="5 campos: minuto, hora, dia, mês e dia da semana.">
+                      <Input aria-label="Expressão cron personalizada" value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} placeholder="0 9,15 * * 1-5" />
+                    </Field>
+                  )}
+                </div>
+              </div>
+              <Field label="Nome da busca" hint="Opcional. Se ficar vazio, usamos as palavras-chave.">
+                <Input placeholder="Ex.: Backend remoto" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </Field>
+            </section>
           </div>
-        </div>
+        </details>
         <div className="flex flex-wrap items-center gap-3">
           <Button disabled={!form.query.trim() || !form.sources.length || (form.sources.includes("boards") && !form.boards.length) || (form.sources.includes("custom") && !form.customSources.length) || task.running || create.isPending || update.isPending || run.isPending} onClick={() => void searchNow()}>
             {task.running ? "Buscando vagas…" : "Buscar vagas agora"}
@@ -253,20 +465,85 @@ function Discover() {
           {task.progress && <span className="text-sm text-muted-foreground">{task.progress.message} ({task.progress.pct}%)</span>}
         </div>
       </Card>
-      <Card className="space-y-1 text-sm">
-        <p className="font-medium">Fontes e execução</p>
-        <p className="text-muted-foreground">Sites públicos são consultados agora pelo servidor. Para incluir LinkedIn, mantenha a extensão ativa e o navegador conectado: ela coleta a busca na próxima verificação, em até 5 minutos. Os resultados entram como sugestões; nada é enviado como candidatura automaticamente.</p>
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-primary"><Globe2 size={16} /></span>
+          <div>
+            <p className="text-sm font-semibold">Execução da busca</p>
+            <p className="text-xs text-muted-foreground">As vagas entram como sugestões. Nenhuma candidatura é enviada automaticamente.</p>
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {form.sources.includes("boards") && (
+            <div className="flex items-start gap-2 rounded-xl border p-3 text-xs">
+              <Globe2 size={14} className="mt-0.5 shrink-0 text-primary" />
+              <div><p className="font-medium">Sites públicos</p><p className="mt-0.5 text-muted-foreground">Consultados pelo servidor assim que você inicia a busca.</p></div>
+            </div>
+          )}
+          {form.sources.includes("linkedin") && (() => {
+            const lastPoll = linkedinStatus.data?.last_poll_at ? Date.parse(linkedinStatus.data.last_poll_at) : NaN;
+            const connected = Number.isFinite(lastPoll) && Date.now() - lastPoll < 10 * 60_000;
+            const result = linkedinStatus.data?.last_result;
+            return (
+              <div className="space-y-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <Linkedin size={14} className="shrink-0 text-sky-600" />
+                  <p className="font-medium">LinkedIn</p>
+                  <Badge tone={connected ? "success" : "warning"}>{connected ? "extensão conectada" : "aguardando extensão"}</Badge>
+                </div>
+                {connected ? (
+                  <p className="text-muted-foreground">Última verificação da extensão: {formatDateTime(linkedinStatus.data?.last_poll_at ?? null)}.</p>
+                ) : (
+                  <p className="text-muted-foreground">A extensão ainda não consultou a API recentemente. Confira se ela está ativa, se o token foi salvo nas opções e se você está conectado ao LinkedIn. <a href="/config?tab=integracoes" className="font-medium text-primary underline">Ver configuração</a></p>
+                )}
+                {result && (
+                  <p className={result.status === "failed" ? "text-danger" : "text-muted-foreground"}>
+                    {result.status === "running" && `Buscando “${result.search_name}”…`}
+                    {result.status === "completed" && `“${result.search_name}”: ${result.created} nova(s), ${result.existing} já conhecida(s).`}
+                    {result.status === "failed" && `“${result.search_name}” não foi concluída: ${result.error ?? "erro da extensão"}`}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
       </Card>
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">{form.query.trim() ? `Vagas para “${form.query.trim()}”` : "Vagas correspondentes"}</h2>
-          {form.query.trim() && <span className="text-sm text-muted-foreground">{matchingJobs.data?.length ?? 0} resultado(s)</span>}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">{form.query.trim() ? `Vagas para “${form.query.trim()}”` : "Vagas para revisar"}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">As vagas coletadas ficam aqui. Só as que você selecionar entram na Fila.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">{visibleJobs.length} para revisar · {selectedJobIds.length} selecionada(s)</span>
+            {visibleJobs.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleVisibleJobs}
+              >
+                {allVisibleSelected ? "Desmarcar resultados" : "Selecionar resultados"}
+              </Button>
+            )}
+            <Button size="sm" disabled={!selectedJobIds.length || selectJobs.isPending} onClick={() => void submitSelectedJobs()}>
+              <Check size={15} /> Enviar selecionadas para a Fila
+            </Button>
+          </div>
         </div>
-        {matchingJobs.data?.length ? (
+        {visibleJobs.length ? (
           <Stagger className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3">
-            {matchingJobs.data.map((job) => <StaggerItem key={job.id}><JobCard job={job} onOpen={setOpenJob} /></StaggerItem>)}
+            {visibleJobs.map((job) => (
+              <StaggerItem key={job.id}>
+                <JobCard
+                  job={job}
+                  onOpen={setOpenJob}
+                  selected={selectedJobIds.includes(job.id)}
+                  onSelect={() => toggleJobSelection(job.id)}
+                />
+              </StaggerItem>
+            ))}
           </Stagger>
-        ) : <EmptyState icon={<Search size={22} />} title={form.query.trim() ? "Nenhuma vaga correspondente ainda" : "Digite palavras-chave para encontrar vagas"}>{form.query.trim() ? "Clique em “Buscar vagas agora” para consultar as fontes selecionadas. Resultados novos aparecerão aqui depois da coleta." : "Informe um cargo, tecnologia ou combinação de palavras. Você poderá filtrar por país e modalidade."}</EmptyState>}
+        ) : <EmptyState icon={<Search size={22} />} title={form.query.trim() ? "Nenhuma vaga para revisar" : "Nenhuma vaga aguardando seleção"}>{form.query.trim() ? "Clique em “Buscar vagas agora” para consultar as fontes selecionadas. Os resultados ficam aqui para você escolher quais vão para a Fila." : "Inicie uma busca para encontrar vagas. Elas só entram na Fila quando você as selecionar aqui."}</EmptyState>}
       </div>
       <JobDrawer job={openJob} onClose={() => setOpenJob(null)} />
     </div>
@@ -288,16 +565,19 @@ function JobsList() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+  const activeView = sp.get("view");
   const [f, setF] = useState<Filters>(() => fromParams(new URLSearchParams(sp.toString())));
   const [limit, setLimit] = useState(PAGE);
   const [drawer, setDrawer] = useState(false);
   const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const debounced = useDebounced(f);
   useEffect(() => {
-    const qs = toParams(debounced).toString();
+    const params = toParams(debounced);
+    if (activeView) params.set("view", activeView);
+    const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     setLimit(PAGE);
-  }, [debounced, pathname, router]);
+  }, [activeView, debounced, pathname, router]);
   const set = (p: Partial<Filters>) => setF((cur) => ({ ...cur, ...p }));
   const apiQs = toParams(debounced, true);
   apiQs.set("limit", String(limit));
@@ -421,7 +701,9 @@ function JobsList() {
             >
               <div className="sticky top-0 flex items-center justify-between border-b bg-card py-3">
                 <p className="font-semibold">Filtros</p>
-                <Button size="sm" onClick={() => setDrawer(false)}>Ver {jobs.length} vaga(s)</Button>
+                <Button size="sm" disabled={isLoading} onClick={() => setDrawer(false)}>
+                  {isLoading ? "Carregando…" : `Ver ${jobs.length}${jobs.length === limit ? "+" : ""} resultados`}
+                </Button>
               </div>
               {panel}
             </motion.div>
@@ -470,57 +752,213 @@ function ImportButton() {
 }
 
 function Companies() {
-  const { data } = useGet<Company[]>(["companies"], "/api/v1/companies");
+  const { data, isLoading } = useGet<Company[]>(["companies"], "/api/v1/companies");
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [companyStatus, setCompanyStatus] = useState("all");
+  const [companyAts, setCompanyAts] = useState("all");
+  const [companySort, setCompanySort] = useState("name");
   const [form, setForm] = useState({ name: "", ats_kind: "greenhouse", ats_board_token: "", is_monitored: true, is_watchlisted: false });
   const create = useSend("POST", "/api/v1/companies", { success: "Empresa adicionada", invalidate: [["companies"]] });
   const update = useSend<{ id: string; body: Partial<Company> }>("PUT", (v) => `/api/v1/companies/${v.id}`, { invalidate: [["companies"]] });
   const poll = useSend<string>("POST", (id) => `/api/v1/companies/${id}/poll`, { success: "Coleta agendada" });
   const seed = useSend<void, { added: number }>("POST", "/api/v1/companies/seed-defaults", { invalidate: [["companies"]] });
+  const companies = data ?? [];
+  const normalizedQuery = companyQuery.trim().toLocaleLowerCase();
+  const counts = {
+    all: companies.length,
+    monitored: companies.filter((company) => company.is_monitored).length,
+    watchlisted: companies.filter((company) => company.is_watchlisted).length,
+    blocked: companies.filter((company) => company.is_blocked).length,
+    unmonitored: companies.filter((company) => !company.is_monitored).length,
+  };
+  const atsOptions = [...new Set(companies.map((company) => company.ats_kind).filter((kind): kind is string => Boolean(kind)))].sort();
+  const filteredCompanies = companies
+    .filter((company) => {
+      const matchesQuery = !normalizedQuery
+        || `${company.name} ${company.ats_kind ?? ""} ${company.ats_board_token ?? ""}`.toLocaleLowerCase().includes(normalizedQuery);
+      const matchesStatus = companyStatus === "all"
+        || (companyStatus === "monitored" && company.is_monitored)
+        || (companyStatus === "watchlisted" && company.is_watchlisted)
+        || (companyStatus === "blocked" && company.is_blocked)
+        || (companyStatus === "unmonitored" && !company.is_monitored);
+      return matchesQuery && matchesStatus && (companyAts === "all" || company.ats_kind === companyAts);
+    })
+    .sort((a, b) => {
+      if (companySort === "recent") {
+        return (b.last_polled_at ? Date.parse(b.last_polled_at) : 0) - (a.last_polled_at ? Date.parse(a.last_polled_at) : 0)
+          || a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  const hasCompanyFilters = Boolean(normalizedQuery || companyStatus !== "all" || companyAts !== "all" || companySort !== "name");
+  const clearCompanyFilters = () => {
+    setCompanyQuery("");
+    setCompanyStatus("all");
+    setCompanyAts("all");
+    setCompanySort("name");
+  };
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span>100 grandes contratantes de tecnologia (48 no Brasil, 52 fora) com site de vagas público verificado. Só entram vagas dos seus cargos-alvo e que dá para fazer do Brasil.</span>
-        <Button variant="outline" onClick={async () => { const r = await seed.mutateAsync(); toast.success(`${r.added} empresas adicionadas`); }}>Importar empresas verificadas</Button>
+      <Card className="flex flex-wrap items-center justify-between gap-4 overflow-hidden border-primary/15 bg-gradient-to-br from-primary/5 via-card to-card p-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Briefcase size={18} /></span>
+          <div>
+            <p className="font-semibold">Seu radar de empresas</p>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Acompanhe boards públicos, destaque empresas favoritas e ajuste quais vagas entram na sua busca.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge>{companies.length} empresas</Badge>
+              <Badge tone="primary">{counts.monitored} monitoradas</Badge>
+              <Badge tone="warning">{counts.watchlisted} favoritas</Badge>
+            </div>
+          </div>
+        </div>
+        <Button variant="outline" onClick={async () => { const r = await seed.mutateAsync(); toast.success(`${r.added} empresas adicionadas`); }}>
+          <Plus size={15} /> Importar empresas verificadas
+        </Button>
       </Card>
-      <Card>
-        <div className="grid gap-2 md:grid-cols-5">
-          <Input placeholder="Empresa" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+      <Card className="space-y-4 p-4">
+        <div>
+          <h2 className="text-sm font-semibold">Adicionar empresa</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Conecte o board público da empresa para monitorar novas vagas.</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1.1fr_0.9fr_1.3fr_1fr_auto]">
+          <Input aria-label="Nome da empresa" placeholder="Empresa" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Select value={form.ats_kind} onChange={(e) => setForm({ ...form, ats_kind: e.target.value })}>
             <option value="greenhouse">Greenhouse</option>
             <option value="lever">Lever</option>
             <option value="ashby">Ashby</option>
             <option value="gupy">Gupy</option>
           </Select>
-          <Input placeholder="token do board (ex.: nubank)" value={form.ats_board_token} onChange={(e) => setForm({ ...form, ats_board_token: e.target.value })} />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.is_watchlisted} onChange={(e) => setForm({ ...form, is_watchlisted: e.target.checked })} />
-            Empresa dos sonhos
+          <Input aria-label="Identificador do board" placeholder="Token do board (ex.: nubank)" value={form.ats_board_token} onChange={(e) => setForm({ ...form, ats_board_token: e.target.value })} />
+          <label className={`flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm transition-colors ${form.is_watchlisted ? "border-amber-500/40 bg-amber-500/10 text-amber-600" : "text-muted-foreground hover:bg-muted/40"}`}>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={form.is_watchlisted}
+              onChange={(e) => setForm({ ...form, is_watchlisted: e.target.checked })}
+            />
+            <Star size={16} className={form.is_watchlisted ? "fill-amber-500 text-amber-500" : ""} />
+            Empresa favorita
+            <span className={`ml-auto grid h-5 w-5 place-items-center rounded-md border ${form.is_watchlisted ? "border-amber-500 bg-amber-500 text-white" : "border-border"}`}>
+              {form.is_watchlisted && <Check size={13} strokeWidth={3} />}
+            </span>
           </label>
-          <Button disabled={!form.name} onClick={() => create.mutate(form)}>Adicionar</Button>
+          <Button disabled={!form.name.trim() || create.isPending} onClick={() => create.mutate(form)}>
+            <Plus size={15} /> Adicionar
+          </Button>
         </div>
       </Card>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs text-muted-foreground">
-            <tr><th className="p-2">Empresa</th><th>ATS</th><th>Monitorar</th><th>Watchlist</th><th>Bloquear</th><th>Última coleta</th><th /></tr>
-          </thead>
-          <tbody>
-            {data?.map((c) => (
-              <tr key={c.id} className="border-t">
-                <td className="p-2"><span className="flex items-center gap-2.5"><CompanyLogo id={c.id} name={c.name} className="h-8 w-8" /> {c.name}</span></td>
-                <td>{c.ats_kind ? `${c.ats_kind}/${c.ats_board_token}` : "—"}</td>
-                {(["is_monitored", "is_watchlisted", "is_blocked"] as const).map((k) => (
-                  <td key={k}>
-                    <input type="checkbox" checked={c[k]} onChange={(e) => update.mutate({ id: c.id, body: { [k]: e.target.checked } })} aria-label={k} />
-                  </td>
+      <Card className="space-y-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative min-w-56 flex-1 sm:max-w-sm">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Buscar empresas"
+              placeholder="Buscar empresa ou ATS"
+              value={companyQuery}
+              onChange={(e) => setCompanyQuery(e.target.value)}
+              className="pl-9 pr-9"
+            />
+            {companyQuery && (
+              <button
+                type="button"
+                aria-label="Limpar busca"
+                onClick={() => setCompanyQuery("")}
+                className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select aria-label="Filtrar por ATS" value={companyAts} onChange={(e) => setCompanyAts(e.target.value)} className="w-40">
+              <option value="all">Todos os ATS</option>
+              {atsOptions.map((ats) => <option key={ats} value={ats}>{ats}</option>)}
+            </Select>
+            <Select aria-label="Ordenar empresas" value={companySort} onChange={(e) => setCompanySort(e.target.value)} className="w-44">
+              <option value="name">Nome (A–Z)</option>
+              <option value="recent">Coleta mais recente</option>
+            </Select>
+            {hasCompanyFilters && (
+              <Button type="button" size="sm" variant="ghost" onClick={clearCompanyFilters}>Limpar filtros</Button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2" aria-label="Filtrar empresas por status">
+          <Chip active={companyStatus === "all"} count={counts.all} onClick={() => setCompanyStatus("all")}>Todas</Chip>
+          <Chip active={companyStatus === "monitored"} count={counts.monitored} onClick={() => setCompanyStatus("monitored")}><Radio size={13} /> Monitoradas</Chip>
+          <Chip active={companyStatus === "watchlisted"} count={counts.watchlisted} onClick={() => setCompanyStatus("watchlisted")}><Star size={13} /> Favoritas</Chip>
+          <Chip active={companyStatus === "blocked"} count={counts.blocked} onClick={() => setCompanyStatus("blocked")}><Ban size={13} /> Bloqueadas</Chip>
+          <Chip active={companyStatus === "unmonitored"} count={counts.unmonitored} onClick={() => setCompanyStatus("unmonitored")}>Não monitoradas</Chip>
+        </div>
+        <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+          <span aria-live="polite">
+            {isLoading ? "Carregando empresas…" : (
+              <><strong className="font-semibold text-foreground">{filteredCompanies.length}</strong> de {companies.length} empresas</>
+            )}
+          </span>
+          <span className="hidden sm:inline">As alterações nos toggles são salvas automaticamente.</span>
+        </div>
+        {isLoading ? (
+          <Skeleton className="h-64" />
+        ) : filteredCompanies.length === 0 ? (
+          <EmptyState
+            icon={<Search size={22} />}
+            title={companies.length ? "Nenhuma empresa encontrada" : "Sua lista de empresas está vazia"}
+            action={hasCompanyFilters ? <Button variant="outline" onClick={clearCompanyFilters}>Limpar filtros</Button> : undefined}
+          >
+            {companies.length ? "Experimente mudar o texto, o ATS ou o status selecionado." : "Adicione uma empresa ou importe a lista de boards verificados para começar."}
+          </EmptyState>
+        ) : (
+          <div className="max-h-[70vh] overflow-auto rounded-lg border">
+            <table className="w-full min-w-[800px] text-sm">
+              <thead className="sticky top-0 z-10 bg-muted/95 text-left text-xs text-muted-foreground backdrop-blur">
+                <tr>
+                  <th className="p-3">Empresa</th>
+                  <th className="p-3">ATS</th>
+                  {COMPANY_FLAGS.map(({ key, label, icon: Icon }) => (
+                    <th key={key} className="p-3 text-center font-medium">
+                      <span className="inline-flex items-center gap-1.5"><Icon size={13} />{label}</span>
+                    </th>
+                  ))}
+                  <th className="p-3">Última coleta</th>
+                  <th className="p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCompanies.map((c) => (
+                  <tr key={c.id} className="border-t transition-colors hover:bg-muted/30">
+                    <td className="p-3"><span className="flex items-center gap-2.5"><CompanyLogo id={c.id} name={c.name} className="h-8 w-8" /> <span className="font-medium">{c.name}</span></span></td>
+                    <td className="p-3"><span className="rounded-md bg-muted px-2 py-1 font-mono text-xs">{c.ats_kind ?? "—"}</span></td>
+                    {COMPANY_FLAGS.map(({ key, label, active }) => (
+                      <td key={key} className="p-3 text-center">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={c[key]}
+                          aria-label={`${c.name}: ${label}`}
+                          title={`${label}: ${c[key] ? "ativado" : "desativado"}`}
+                          disabled={update.isPending}
+                          onClick={() => update.mutate({ id: c.id, body: { [key]: !c[key] } })}
+                          className="group inline-flex min-h-9 min-w-12 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          <span className={`relative h-6 w-11 rounded-full p-0.5 transition-colors ${c[key] ? active : "bg-muted-foreground/25 group-hover:bg-muted-foreground/40"}`}>
+                            <span className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${c[key] ? "translate-x-5" : "translate-x-0"}`} />
+                          </span>
+                        </button>
+                      </td>
+                    ))}
+                    <td className="whitespace-nowrap p-3 text-xs text-muted-foreground">{formatDateTime(c.last_polled_at)}</td>
+                    <td className="p-3">{c.ats_board_token && <Button size="sm" variant="ghost" onClick={() => poll.mutate(c.id)}><Eye size={14} /> Coletar</Button>}</td>
+                  </tr>
                 ))}
-                <td className="text-xs">{formatDateTime(c.last_polled_at)}</td>
-                <td>{c.ats_board_token && <Button size="sm" variant="ghost" onClick={() => poll.mutate(c.id)}>Coletar</Button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -533,38 +971,130 @@ function Searches() {
   const del = useSend<string>("DELETE", (id) => `/api/v1/saved-searches/${id}`, { invalidate: [["searches"]] });
   const toggleSource = (s: string) =>
     setForm({ ...form, sources: form.sources.includes(s) ? form.sources.filter((x) => x !== s) : [...form.sources, s] });
+  const sourceOptions = [
+    { id: "monitored", title: "Empresas monitoradas", detail: "Boards das empresas da sua lista", icon: Briefcase },
+    { id: "boards", title: "Sites públicos", detail: "Agregadores de vagas remotas", icon: Globe2 },
+    { id: "linkedin", title: "LinkedIn", detail: "Busca pela extensão local", icon: Linkedin },
+  ];
   return (
     <div className="space-y-4">
-      <Card className="space-y-2">
-        <div className="grid gap-2 md:grid-cols-3">
-          <Input placeholder="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <Input placeholder="Termos (use | para OU): data engineer | engenheiro de dados" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} />
-          <Input placeholder="cron" value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} />
+      <div className="flex items-start gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Clock3 size={18} /></span>
+        <div>
+          <h2 className="font-semibold">Buscas recorrentes</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Escolha as fontes e a frequência. Você também pode executar qualquer busca manualmente.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("monitored")} onChange={() => toggleSource("monitored")} /> Empresas monitoradas</label>
-          <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("boards")} onChange={() => toggleSource("boards")} /> Sites de vagas (Remotive, RemoteOK, Himalayas, Jobicy, Arbeitnow, WWR, Working Nomads)</label>
-          <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("linkedin")} onChange={() => toggleSource("linkedin")} /> LinkedIn (robô local)</label>
+      </div>
+      <Card className="space-y-5 p-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Nome da busca">
+            <Input placeholder="Ex.: Backend remoto" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="Palavras-chave" hint="Use | para combinar alternativas.">
+            <Input placeholder="data engineer | engenheiro de dados" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} />
+          </Field>
+        </div>
+        <section className="space-y-3" aria-labelledby="saved-search-sources-title">
+          <div>
+            <h3 id="saved-search-sources-title" className="text-sm font-semibold">Fontes</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Escolha onde procurar as vagas desta busca.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {sourceOptions.map(({ id, title, detail, icon: Icon }) => {
+              const selected = form.sources.includes(id);
+              return (
+                <label
+                  key={id}
+                  className={`relative flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all ${
+                    selected ? "border-primary/50 bg-primary/5 shadow-sm" : "hover:border-primary/30 hover:bg-muted/30"
+                  }`}
+                >
+                  <input type="checkbox" className="peer sr-only" checked={selected} onChange={() => toggleSource(id)} />
+                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                    <Icon size={17} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{title}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{detail}</span>
+                  </span>
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent"} peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40`}>
+                    <Check size={13} strokeWidth={3} />
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {form.sources.includes("boards") && (
+            <p className="flex items-start gap-2 rounded-xl border bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground">
+              <Globe2 size={14} className="mt-0.5 shrink-0 text-primary" />
+              A busca consulta Remotive, RemoteOK, Himalayas, Jobicy, Arbeitnow, Working Nomads e We Work Remotely.
+            </p>
+          )}
+        </section>
+        <section className="space-y-3 border-t pt-5" aria-labelledby="saved-search-schedule-title">
+          <div>
+            <h3 id="saved-search-schedule-title" className="text-sm font-semibold">Recorrência</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Defina quando atualizar automaticamente. Horários seguem o fuso da sua conta.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Frequência">
+              <Select
+                value={SCHEDULE_PRESETS.some((preset) => preset.cron === form.schedule_cron) ? form.schedule_cron : "custom"}
+                onChange={(e) => {
+                  const preset = SCHEDULE_PRESETS.find((option) => option.cron === e.target.value);
+                  if (preset) setForm({ ...form, schedule_cron: preset.cron });
+                }}
+              >
+                {SCHEDULE_PRESETS.map((preset) => <option key={preset.cron} value={preset.cron}>{preset.label} · {preset.detail}</option>)}
+                <option value="custom">Personalizada</option>
+              </Select>
+            </Field>
+            {SCHEDULE_PRESETS.some((preset) => preset.cron === form.schedule_cron) ? (
+              <p className="flex items-center gap-2 self-end rounded-lg bg-accent/50 px-3 py-2.5 text-xs text-muted-foreground">
+                <Clock3 size={14} className="shrink-0 text-primary" />
+                {SCHEDULE_PRESETS.find((preset) => preset.cron === form.schedule_cron)?.detail}
+              </p>
+            ) : (
+              <Field label="Expressão cron personalizada" hint="5 campos: minuto, hora, dia, mês e dia da semana.">
+                <Input value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} placeholder="0 9,15 * * 1-5" />
+              </Field>
+            )}
+          </div>
+        </section>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <p className="text-xs text-muted-foreground">A busca salva fica ativa até você excluí-la.</p>
           <Button
-            disabled={!form.name || !form.query}
-            onClick={() => create.mutate({ name: form.name, query: form.query, sources: form.sources, schedule_cron: form.schedule_cron, filters: { work_models: form.work_models } })}
+            disabled={!form.name.trim() || !form.query.trim() || !form.sources.length || create.isPending}
+            onClick={() => create.mutate({ name: form.name.trim(), query: form.query.trim(), sources: form.sources, schedule_cron: form.schedule_cron, filters: { work_models: form.work_models } })}
           >
-            Salvar busca
+            <Plus size={15} /> Salvar busca
           </Button>
         </div>
       </Card>
       {data?.map((s) => (
-        <Card key={s.id} className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-medium">{s.name}</p>
-            <p className="text-xs text-muted-foreground">
-              “{s.query}” · {s.sources.join(", ")} · <code>{s.schedule_cron}</code> · última: {formatDateTime(s.last_run_at)}
-            </p>
+        <Card key={s.id} className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold">{s.name}</p>
+              <Badge tone={s.is_active ? "success" : "neutral"}>{s.is_active ? "ativa" : "pausada"}</Badge>
+              <Badge tone="primary">{scheduleLabel(s.schedule_cron)}</Badge>
+            </div>
+            <p className="truncate text-sm text-muted-foreground">“{s.query}”</p>
+            <div className="flex flex-wrap gap-1.5">
+              {s.sources.map((source) => (
+                <Badge key={source}>
+                  {source === "monitored" ? "Empresas monitoradas" : source === "boards" ? "Sites públicos" : source === "linkedin" ? "LinkedIn" : source}
+                </Badge>
+              ))}
+              <span className="self-center text-xs text-muted-foreground">Última busca: {formatDateTime(s.last_run_at)}</span>
+            </div>
+            {!SCHEDULE_PRESETS.some((preset) => preset.cron === s.schedule_cron) && (
+              <p className="font-mono text-[11px] text-muted-foreground">{s.schedule_cron}</p>
+            )}
           </div>
-          <div className="flex gap-2">
-            {!s.is_active && <Badge>pausada</Badge>}
-            <Button size="sm" variant="outline" onClick={() => run.mutate(s.id)}>Rodar agora</Button>
-            <Button size="sm" variant="ghost" onClick={() => del.mutate(s.id)}>Excluir</Button>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="outline" onClick={() => run.mutate(s.id)}><Search size={14} /> Rodar agora</Button>
+            <Button size="sm" variant="ghost" onClick={() => del.mutate(s.id)}><X size={14} /> Excluir</Button>
           </div>
         </Card>
       ))}

@@ -47,7 +47,7 @@ Autorização incremental: login primeiro; Gmail e Calendar quando o usuário co
 | Mensagens | Somente leitura das conversas novas, disparada por notificação no Gmail |
 | Perfil do usuário | Leitura para a otimização (RF-ANA-06) |
 
-Verificações da extensão ocorrem a cada 5 minutos, com no máximo uma busca por verificação, e a agenda da busca define quando uma consulta pode ser executada. Só os cartões presentes no carregamento inicial são importados; a extensão não pagina resultados automaticamente. Login vencido, ausência de resultados ou erro de importação geram indicação de erro no ícone da extensão. O usuário deve respeitar os termos do LinkedIn e pode desabilitar a fonte ou extensão a qualquer momento.
+Verificações da extensão ocorrem a cada 30 segundos, com no máximo uma busca ativa por vez, e a agenda da busca define quando uma consulta pode ser executada. Ao alterar o endereço da API, o token ou o estado ativo nas opções, a extensão consulta a API imediatamente. A aba de descoberta mostra se a extensão foi vista nos últimos 10 minutos e o resultado da última coleta. Só os cartões presentes no carregamento inicial são importados; a extensão não pagina resultados automaticamente. Login vencido, redirecionamento para outra página, aba fechada, timeout ou erro de importação são reportados ao dashboard e indicados no ícone da extensão. O usuário deve respeitar os termos do LinkedIn e pode desabilitar a fonte ou extensão a qualquer momento.
 
 Limites de candidatura (não aplicados à descoberta):
 | Item | Padrão |

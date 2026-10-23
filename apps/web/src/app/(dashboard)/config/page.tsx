@@ -122,6 +122,24 @@ function useSetting<T>(key: string) {
 type Policy = { easy_apply: { mode: string; dry_run: boolean; follow_company: boolean; auto: { min_quadrant: string; min_chance: number; min_answer_confidence: number; allow_tailored_resume: boolean; max_per_day: number } } };
 type Limits = { easy_apply_per_day: number; linkedin_page_views_per_day: number; linkedin_searches_per_day: number; between_applications_s: number[]; long_pause_every: number; window: { days: number[]; start: string; end: string }; per_company_per_month: number };
 
+const DEFAULT_EASY_APPLY_POLICY: Policy["easy_apply"] = {
+  mode: "review",
+  dry_run: true,
+  follow_company: false,
+  auto: { min_quadrant: "top", min_chance: 0.7, min_answer_confidence: 0.9, allow_tailored_resume: false, max_per_day: 3 },
+};
+
+function normalizePolicy(value: Partial<Policy>): Policy {
+  return {
+    ...value,
+    easy_apply: {
+      ...DEFAULT_EASY_APPLY_POLICY,
+      ...value.easy_apply,
+      auto: { ...DEFAULT_EASY_APPLY_POLICY.auto, ...value.easy_apply?.auto },
+    },
+  } as Policy;
+}
+
 function AutomationTab() {
   const flags = useSetting<Record<string, boolean>>("flags");
   const policy = useSetting<Policy>("automation_policy");
@@ -130,7 +148,7 @@ function AutomationTab() {
   const tracking = useSetting<{ ghost_after_days: number; followup_after_days: number }>("tracking");
   const [p, setP] = useState<Policy | null>(null);
   const [l, setL] = useState<Limits | null>(null);
-  useEffect(() => { if (policy.data) setP(policy.data); }, [policy.data]);
+  useEffect(() => { if (policy.data) setP(normalizePolicy(policy.data)); }, [policy.data]);
   useEffect(() => { if (limits.data) setL(limits.data); }, [limits.data]);
   const FLAG_LABEL: Record<string, string> = { gmail: "Ler Gmail", gmail_labels: "Marcar e-mails de vaga no Gmail (Vagas/…)", calendar: "Google Agenda", telegram: "Telegram", job_sources: "Coletar vagas de ATS", linkedin_agent: "Robô do LinkedIn", company_research: "Pesquisa de empresas", auto_apply: "Permitir modo automático" };
   return (

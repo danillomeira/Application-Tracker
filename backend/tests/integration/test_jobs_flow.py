@@ -58,6 +58,7 @@ async def test_upsert_dedup_and_repost(session) -> None:
     assert j1.repost_count == 1
     assert len((await session.scalars(select(JobSource).where(JobSource.job_id == j1.id))).all()) == 3
     assert len((await session.scalars(select(JobSnapshot))).all()) == 1
+    assert j1.triage == "discovered"
     j5, new5 = await job_service.upsert_job(session, raw("3", title="Frontend Engineer", desc="React and TypeScript, onsite"))
     assert new5 and j5.id != j1.id
 
@@ -199,6 +200,7 @@ async def test_dashboard_today(client: AsyncClient, session) -> None:
     r = await client.get("/api/v1/dashboard/today")
     assert r.status_code == 200
     assert r.json()["onboarding_needed"] is True
+    assert r.json()["agent"]["paused_until"] is None
     await factories.seed_master(session)
     r = await client.get("/api/v1/dashboard/today")
     assert r.json()["onboarding_needed"] is False and r.json()["quota"]["limit"] == 20

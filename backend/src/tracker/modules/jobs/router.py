@@ -9,6 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy import Text, and_, case, exists, func, or_, select
 
 from tracker.api.deps import SessionDep, TaskAccepted, get_or_404
@@ -33,6 +34,10 @@ from tracker.modules.scoring.models import JobScore
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 searches_router = APIRouter(prefix="/saved-searches", tags=["jobs"])
+
+
+class SelectDiscoveredIn(BaseModel):
+    job_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
 
 
 def _job_out(
@@ -235,6 +240,26 @@ async def get_snapshot(job_id: uuid.UUID, snapshot_id: uuid.UUID, session: Sessi
 async def import_job(body: JobImportIn, session: SessionDep, _user: CurrentUser) -> TaskAccepted:
     tr = await enqueue(session, "ingest.import_job", **body.model_dump())
     return TaskAccepted(task_id=tr.id)
+
+
+@router.post("/select")
+async def select_discovered_jobs(body: SelectDiscoveredIn, session: SessionDep, _user: CurrentUser) -> dict[str, int]:
+    """Move apenas vagas selecionadas em Descobrir para a fila de vagas novas."""
+    job_ids = set(body.job_ids)
+    jobs = list(
+        (
+            await session.scalars(
+                select(Job).where(Job.id.in_(job_ids), Job.status == "open", Job.triage == "discovered")
+            )
+        ).all()
+    )
+    if len(jobs) != len(job_ids):
+        raise HTTPException(409, "algumas vagas não estão mais aguardando seleção em Descobrir")
+    for job in jobs:
+        job.triage = "new"
+        await audit.record(session, actor="user", action="job.selected_for_queue", entity_type="job", entity_id=job.id)
+    await session.commit()
+    return {"selected": len(jobs)}
 
 
 @router.post("/{job_id}/feedback", status_code=204)

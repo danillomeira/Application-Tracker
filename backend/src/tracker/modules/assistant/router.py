@@ -6,8 +6,8 @@ import hashlib
 import hmac
 import secrets
 import uuid
-from datetime import UTC, datetime
-from typing import Annotated, Any
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any, Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -65,6 +65,25 @@ def linkedin_search_url(query: str, filters: dict[str, Any]) -> str:
     return f"https://www.linkedin.com/jobs/search/?{urlencode(params)}"
 
 
+class LinkedinDiscoveryCompleteIn(BaseModel):
+    status: Literal["completed", "failed"]
+    count: int = Field(default=0, ge=0, le=200)
+    created: int = Field(default=0, ge=0, le=200)
+    existing: int = Field(default=0, ge=0, le=200)
+    error: str | None = Field(default=None, max_length=300)
+
+
+@router.get("/discovery/status")
+async def linkedin_discovery_status(session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
+    """Estado seguro da extensão e da última busca do LinkedIn para exibir no dashboard."""
+    cfg = await settings_store.get(session, "extension")
+    state = cfg.get("linkedin_discovery") or {}
+    return {
+        "last_poll_at": state.get("last_poll_at"),
+        "last_result": state.get("last_result"),
+    }
+
+
 @router.get("/discovery/due")
 async def due_linkedin_discoveries(session: SessionDep, _auth: Auth) -> list[dict[str, str]]:
     """Claim buscas LinkedIn agendadas para a extensão local."""
@@ -80,10 +99,42 @@ async def due_linkedin_discoveries(session: SessionDep, _auth: Auth) -> list[dic
         )
     ).all()
     due: list[dict[str, str]] = []
+    cfg = await settings_store.get(session, "extension")
+    state = cfg.get("linkedin_discovery") or {}
+    state["last_poll_at"] = now.isoformat()
+    active = state.get("last_result") or {}
+    if active.get("status") == "running":
+        try:
+            started_at = datetime.fromisoformat(str(active.get("started_at")))
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=UTC)
+        except ValueError:
+            started_at = now - timedelta(minutes=10)
+        if now - started_at < timedelta(minutes=3):
+            await settings_store.put(session, "extension", {**cfg, "linkedin_discovery": state})
+            await session.commit()
+            return due
+        state["last_result"] = {
+            **active,
+            "status": "failed",
+            "completed_at": now.isoformat(),
+            "error": "A extensão não confirmou o resultado dentro do prazo.",
+        }
     for search in searches:
         if "linkedin" not in search.sources or not cron_due(search.schedule_cron, search.last_linkedin_run_at, now):
             continue
         search.last_linkedin_run_at = now
+        state["last_result"] = {
+            "search_id": str(search.id),
+            "search_name": search.name,
+            "status": "running",
+            "started_at": now.isoformat(),
+            "completed_at": None,
+            "count": 0,
+            "created": 0,
+            "existing": 0,
+            "error": None,
+        }
         due.append(
             {
                 "id": str(search.id),
@@ -92,9 +143,38 @@ async def due_linkedin_discoveries(session: SessionDep, _auth: Auth) -> list[dic
             }
         )
         break
-    if due:
-        await session.commit()
+    await settings_store.put(session, "extension", {**cfg, "linkedin_discovery": state})
+    await session.commit()
     return due
+
+
+@router.post("/discovery/{search_id}/complete")
+async def complete_linkedin_discovery(
+    search_id: uuid.UUID,
+    body: LinkedinDiscoveryCompleteIn,
+    session: SessionDep,
+    _auth: Auth,
+) -> dict[str, str]:
+    search = await session.get(SavedSearch, search_id)
+    if search is None:
+        raise HTTPException(404, "busca salva não encontrada")
+    cfg = await settings_store.get(session, "extension")
+    state = cfg.get("linkedin_discovery") or {}
+    current = state.get("last_result") or {}
+    if current.get("search_id") != str(search_id):
+        raise HTTPException(409, "esta busca não está aguardando resultado da extensão")
+    state["last_result"] = {
+        **current,
+        "status": body.status,
+        "completed_at": datetime.now(UTC).isoformat(),
+        "count": body.count,
+        "created": body.created,
+        "existing": body.existing,
+        "error": body.error if body.status == "failed" else None,
+    }
+    await settings_store.put(session, "extension", {**cfg, "linkedin_discovery": state})
+    await session.commit()
+    return {"status": body.status}
 
 
 @router.post("/token")

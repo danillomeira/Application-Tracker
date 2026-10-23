@@ -38,6 +38,35 @@ async def test_ashby_parsing() -> None:
     assert jobs[0].salary == {"min": 8000, "max": 11000, "currency": "USD", "period": "month", "estimated": False}
 
 
+async def test_jobicy_go_keyword_uses_supported_golang_tag() -> None:
+    requests: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "jobs": [
+                    {
+                        "id": 123,
+                        "jobTitle": "Go Engineer",
+                        "companyName": "Globex",
+                        "url": "https://jobicy.com/jobs/123-go-engineer",
+                        "jobDescription": "<p>Build Go services.</p>",
+                    }
+                ]
+            },
+        )
+
+    jobs = await job_sources.board_jobicy("go", httpx.MockTransport(respond))
+
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/jobs"
+    assert dict(requests[0].url.params) == {"count": "50", "tag": "golang"}
+    assert jobs[0].external_id == "123" and jobs[0].source == "jobicy"
+    assert jobs[0].title == "Go Engineer" and "Build Go services." in (jobs[0].description_text or "")
+
+
 def test_parse_ats_url() -> None:
     assert job_sources.parse_ats_url("https://boards.greenhouse.io/globex/jobs/4001") == (
         "greenhouse",

@@ -972,10 +972,6 @@ function Searches() {
   const del = useSend<string>("DELETE", (id) => `/api/v1/saved-searches/${id}`, { invalidate: [["searches"]] });
   const toggleSource = (s: string) =>
     setForm({ ...form, sources: form.sources.includes(s) ? form.sources.filter((x) => x !== s) : [...form.sources, s] });
-  const sourceOptions = [
-    { id: "monitored", title: "Empresas monitoradas", detail: "Boards das empresas da sua lista", icon: Briefcase },
-    { id: "boards", title: "Sites públicos", detail: "Agregadores de vagas remotas", icon: Globe2 },
-  ];
   return (
     <div className="space-y-4">
       <Card className="space-y-2">
@@ -1002,7 +998,7 @@ function Searches() {
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("monitored")} onChange={() => toggleSource("monitored")} /> Empresas monitoradas</label>
           <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("boards")} onChange={() => toggleSource("boards")} /> Sites de vagas (Remotive, RemoteOK, Himalayas, Jobicy, Arbeitnow, WWR, Working Nomads)</label>
-          <span className="text-xs text-muted-foreground">Vagas do LinkedIn: crie alertas de vaga no LinkedIn (chegam pelo Gmail) ou use “Importar para o tracker” na extensão.</span>
+          <span className="text-xs text-muted-foreground">Vagas do LinkedIn: crie alertas de vaga no LinkedIn e conecte o Gmail para identificá-los na sua caixa de entrada.</span>
           <Button
             disabled={!form.name || !form.query || create.isPending}
             onClick={() =>

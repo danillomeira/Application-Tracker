@@ -159,8 +159,7 @@ async def _extract_page(session: SessionDep, body: PageIn) -> JobNormalized:
 async def analyze(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
     """Analisa a vaga da página (uma chamada de IA, cache de 90 dias) e avalia (Chance × Atratividade).
 
-    Vaga já conhecida mas sem descrição (ex.: importada da lista de busca do LinkedIn) é completada com o
-    texto desta página e reavaliada."""
+    Vaga já conhecida mas sem descrição é completada com o texto desta página e reavaliada."""
     job = await service.find_job(session, body.url)
     if job is None and service.is_flow_page(body.url):
         raise HTTPException(422, "esta tela é login ou etapa da candidatura, não uma vaga; abra a página da vaga")

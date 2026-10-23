@@ -100,7 +100,7 @@ function IntegrationsTab() {
       <GuideCard title="Extensão do navegador" ok={c.extension.ok} detail="painel da vaga, preenchimento e registro da candidatura">
         <ExtensionGuide />
       </GuideCard>
-      <GuideCard title="Vagas do LinkedIn" ok={c.google.ok} detail="alertas de vaga pelo Gmail e importação pela extensão">
+      <GuideCard title="Vagas do LinkedIn" ok={c.google.ok} detail="alertas pelo Gmail e análise manual de vagas individuais">
         <LinkedinGuide gmailConnected={c.google.ok} />
       </GuideCard>
       <GuideCard title="PDF dos currículos (tectonic)" ok={c.latex.ok} detail={c.latex.detail}>
@@ -116,24 +116,6 @@ function useSetting<T>(key: string) {
   return { data: q.data, save };
 }
 
-
-const DEFAULT_EASY_APPLY_POLICY: Policy["easy_apply"] = {
-  mode: "review",
-  dry_run: true,
-  follow_company: false,
-  auto: { min_quadrant: "top", min_chance: 0.7, min_answer_confidence: 0.9, allow_tailored_resume: false, max_per_day: 3 },
-};
-
-function normalizePolicy(value: Partial<Policy>): Policy {
-  return {
-    ...value,
-    easy_apply: {
-      ...DEFAULT_EASY_APPLY_POLICY,
-      ...value.easy_apply,
-      auto: { ...DEFAULT_EASY_APPLY_POLICY.auto, ...value.easy_apply?.auto },
-    },
-  } as Policy;
-}
 
 function AutomationTab() {
   const flags = useSetting<Record<string, boolean>>("flags");

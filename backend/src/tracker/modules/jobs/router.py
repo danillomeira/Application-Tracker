@@ -379,7 +379,6 @@ def _check_cron(expr: str) -> None:
 
     from tracker.modules.jobs.tasks import cron_due
 
-    reject_linkedin_source(body.sources)
     try:
         cron_due(expr, None, datetime.now())
     except Exception as exc:
@@ -388,6 +387,7 @@ def _check_cron(expr: str) -> None:
 
 @searches_router.post("", response_model=SavedSearchOut, status_code=201)
 async def create_search(body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
+    reject_linkedin_source(body.sources)
     _check_cron(body.schedule_cron)
     row = SavedSearch(**body.model_dump())
     session.add(row)
@@ -398,6 +398,7 @@ async def create_search(body: SavedSearchIn, session: SessionDep, _user: Current
 @searches_router.put("/{search_id}", response_model=SavedSearchOut)
 async def update_search(search_id: uuid.UUID, body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
     row = await get_or_404(session, SavedSearch, search_id)
+    reject_linkedin_source(body.sources)
     _check_cron(body.schedule_cron)
     for k, v in body.model_dump().items():
         setattr(row, k, v)

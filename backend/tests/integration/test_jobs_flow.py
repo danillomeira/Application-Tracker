@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
-from tracker.modules.agent_gateway.models import AgentJob
 
 from tests import factories
 from tracker.integrations.claude.client import FakeAIClient
@@ -174,7 +173,7 @@ async def test_dashboard_today(client: AsyncClient, session) -> None:
     r = await client.get("/api/v1/dashboard/today")
     assert r.status_code == 200
     assert r.json()["onboarding_needed"] is True
-    assert r.json()["agent"]["paused_until"] is None
+    assert "agent" not in r.json() and "quota" not in r.json()
     await factories.seed_master(session)
     r = await client.get("/api/v1/dashboard/today")
     assert r.json()["onboarding_needed"] is False and "agent" not in r.json() and "quota" not in r.json()

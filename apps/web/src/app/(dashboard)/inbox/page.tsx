@@ -4,7 +4,7 @@ import { Inbox as InboxIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Tabs, Textarea, Skeleton } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Skeleton, SkeletonList, Tabs, Textarea } from "@/components/ui";
 import { useGet, useSend } from "@/lib/hooks";
 import { EMAIL_LABEL } from "@/lib/labels";
 import { formatDateTime } from "@/lib/utils";
@@ -152,4 +152,3 @@ function Drafts() {
     </div>
   );
 }
-

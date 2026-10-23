@@ -238,17 +238,16 @@ Para buscar vagas por palavras-chave, abra **Vagas → Descobrir**, digite o car
 
 ## 8. Vagas do LinkedIn
 
-Sem robô e sem risco para a sua conta. Dois caminhos:
+Sem robô e sem coleta automatizada dos resultados de busca. As vagas chegam por alertas no Gmail; você também pode analisar manualmente uma vaga individual.
 
 **Automático (recomendado): alertas de vaga pelo Gmail**
 1. No LinkedIn, em **Vagas**, faça a busca que quer acompanhar (cargo, local, remoto, Easy Apply…).
 2. Ligue **"Ativar alerta"** no topo dos resultados. Em **Gerenciar alertas**, frequência **diária** e notificação por **e-mail**.
 3. Com o Gmail conectado (seção 5), cada e-mail de alerta vira vagas na aba **Vagas**, com nota, e o e-mail ganha o marcador `Vagas/LinkedIn`.
 
-**Na hora: importar a busca da sua tela**
-1. Com a extensão instalada, abra uma busca de vagas no LinkedIn.
-2. No painel do assistente, clique em **"Importar para o tracker"**. Role a lista para carregar mais e importe de novo.
-3. Ao abrir uma vaga, a descrição completa entra sozinha e a nota é refeita.
+**Na hora: analisar uma vaga específica**
+1. Com a extensão instalada, abra manualmente a página de uma vaga individual no LinkedIn.
+2. No painel do assistente, escolha **"Avaliar e salvar vaga"**. A extensão analisa a vaga aberta, não os resultados de busca.
 
 Para se candidatar (inclusive no Easy Apply), a extensão preenche o formulário; quem clica em enviar é você.
 
@@ -268,6 +267,6 @@ Para se candidatar (inclusive no Easy Apply), a extensão preenche o formulário
 | "localhost recusou a conexão" ao abrir um PDF | O app não estava rodando (API na 8000, dashboard na 3100). Confira os terminais do passo 3. |
 | Porta 5432/5433 ocupada | O compose usa a 5433. Se ela também estiver em uso, mude o mapeamento em `infra/docker-compose.yml` e a `DATABASE_URL` no `.env`. |
 | PDFs dos currículos não geram | Instale o `tectonic` (seção 1) e reinicie o worker. |
-| Vagas do LinkedIn não aparecem | Confira se o Gmail está conectado e se os alertas do LinkedIn chegam por e-mail; ou use "Importar para o tracker" na extensão. |
+| Vagas do LinkedIn não aparecem | Confira se o Gmail está conectado e se os alertas oficiais de vagas do LinkedIn chegam por e-mail. A descoberta não coleta resultados do site. |
 | Extensão não aparece na página da vaga | Confira o token e o endereço da API nas Opções, se a API está rodando, e recarregue a página. Em WSL, confirme que copiou a versão mais nova (seção 7). |
 | Telegram não responde aos comandos | Só uma instância da API pode estar rodando; confira `TELEGRAM_BOT_TOKEN` e reinicie. |

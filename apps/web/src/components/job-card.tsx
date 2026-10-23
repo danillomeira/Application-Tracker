@@ -61,7 +61,19 @@ export function formatSalary(s: JobRow["salary"]): string | null {
 const QUADRANT_ICON: Record<string, React.ComponentType<{ size?: number }>> = { top: Flame, bet: Target, volume: Layers, discard: Archive, blocked: Ban };
 
 /** Cartão enxuto da vaga: o essencial com ícones. Clicar abre o painel com detalhes e o próximo passo. */
-export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: JobRow) => void; onTech?: (tech: string) => void }) {
+export function JobCard({
+  job,
+  onOpen,
+  onTech,
+  selected = false,
+  onSelect,
+}: {
+  job: JobRow;
+  onOpen?: (job: JobRow) => void;
+  onTech?: (tech: string) => void;
+  selected?: boolean;
+  onSelect?: (job: JobRow) => void;
+}) {
   const inv = { invalidate: [["jobs"], ["dashboard"], ["facets"]] };
   const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, inv);
   const restore = useSend("POST", `/api/v1/jobs/${job.id}/restore`, { success: "Vaga de volta em Novas", ...inv });

@@ -3,7 +3,7 @@
 import { Calendar } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, buttonVariants } from "@/components/ui";
+import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, SkeletonList, buttonVariants } from "@/components/ui";
 import { useGet, useSend } from "@/lib/hooks";
 
 type Event = { id: string; application_id: string | null; kind: string; title: string; description: string | null; starts_at: string; ends_at: string; location_or_link: string | null; status: string; google_event_id: string | null; meta: { conflicts?: string[]; local_only?: boolean; sync_error?: string } };

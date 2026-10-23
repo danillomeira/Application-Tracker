@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import contextlib
 import functools
 import hashlib
@@ -26,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
+import httpx
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

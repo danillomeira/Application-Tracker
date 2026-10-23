@@ -171,6 +171,13 @@ async def test_ollama_extracts_text_from_pdf(sessionmaker) -> None:
     )
 
 
+def test_ollama_rejects_invalid_pdf_encoding() -> None:
+    with pytest.raises(ai.AIError, match="não foi possível extrair texto"):
+        ai.OllamaClient._text_content(
+            [{"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "***"}}]
+        )
+
+
 async def test_ollama_rejects_unsupported_web_tools(sessionmaker) -> None:
     client = ai.OllamaClient(sessionmaker, transport=httpx.MockTransport(lambda request: httpx.Response(500)))
     with pytest.raises(ai.AIError, match="ferramentas web"):

@@ -22,7 +22,57 @@
   let linkedinDiscoveryRunning = false;
 
   // ---------------- comunicação ----------------
-  const bg = (msg) => new Promise((resolve, reject) => chrome.runtime.sendMessage(msg, (r) => (r?.ok ? resolve(r.data) : reject(new Error(r?.error || "sem resposta")))));
+  const MESSAGE_MAX_RETRIES = 4;
+  const MESSAGE_BACKOFF_BASE_MS = 250;
+  const MESSAGE_BACKOFF_CAP_MS = 4000;
+  const retryableMessage = (msg) =>
+    ["config", "linkedinDiscoveryInfo", "logo", "resume"].includes(msg.type)
+    || (msg.type === "api" && msg.method === "GET");
+  const transientMessageError = (error) => {
+    const message = String(error?.message || error).toLowerCase();
+    if (message.includes("extension context invalidated")) return false;
+    return /receiving end does not exist|could not establish connection|message port closed|disconnected port|background response timed out/.test(message);
+  };
+  const messageDefinitelyNotDelivered = (error) =>
+    /receiving end does not exist|could not establish connection/i.test(String(error?.message || error));
+  const sendBackgroundMessage = (msg) => new Promise((resolve, reject) => {
+    let timer;
+    const finish = (callback, value) => {
+      clearTimeout(timer);
+      callback(value);
+    };
+    try {
+      if (!chrome.runtime?.id) throw new Error("Extension context invalidated");
+      timer = setTimeout(() => finish(reject, new Error("Background response timed out")), 8000);
+      chrome.runtime.sendMessage(msg, (r) => {
+        const runtimeError = chrome.runtime.lastError;
+        if (runtimeError) return finish(reject, new Error(runtimeError.message));
+        if (r?.ok) return finish(resolve, r.data);
+        finish(reject, new Error(r?.error || "sem resposta"));
+      });
+    } catch (error) {
+      finish(reject, error);
+    }
+  });
+  const bg = async (msg) => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await sendBackgroundMessage(msg);
+      } catch (error) {
+        const safeRetry = retryableMessage(msg) || messageDefinitelyNotDelivered(error);
+        if (!safeRetry || !transientMessageError(error) || attempt >= MESSAGE_MAX_RETRIES) throw error;
+        const ceiling = Math.min(MESSAGE_BACKOFF_CAP_MS, MESSAGE_BACKOFF_BASE_MS * (2 ** attempt));
+        // Full jitter spreads retries across clients when the background wakes again.
+        await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * ceiling)));
+      }
+    }
+  };
+  const explainError = (error) => {
+    const message = String(error?.message || error);
+    return /extension context invalidated/i.test(message)
+      ? "A extensÃ£o foi recarregada durante o preenchimento. Atualize esta pÃ¡gina e tente novamente."
+      : message;
+  };
   const api = (method, path, body) => bg({ type: "api", method, path, body });
   const session = {
     get: () => { try { return JSON.parse(sessionStorage.getItem(SS_KEY) || "{}"); } catch { return {}; } },
@@ -53,23 +103,27 @@
     const vs = synOf(value);
     let idx = options.findIndex((o) => norm(o) === v);
     if (idx >= 0) return idx;
-    idx = options.findIndex((o) => vs.includes(norm(o)) || synOf(o).some((x) => vs.includes(x)));
-    if (idx >= 0) return idx;
-    idx = options.findIndex((o) => { const n = norm(o); return n && (n.includes(v) || v.includes(n)) && Math.min(n.length, v.length) >= 2; });
-    if (idx >= 0) return idx;
+    const synonyms = options.flatMap((o, i) => vs.includes(norm(o)) || synOf(o).some((x) => vs.includes(x)) ? [i] : []);
+    if (synonyms.length === 1) return synonyms[0];
+    const partial = options.flatMap((o, i) => {
+      const n = norm(o);
+      return n && (n.includes(v) || v.includes(n)) && Math.min(n.length, v.length) >= 2 ? [i] : [];
+    });
+    if (partial.length === 1) return partial[0];
     const num = parseFloat(String(value).replace(",", "."));
     if (!Number.isNaN(num)) {
-      idx = options.findIndex((o) => {
+      const ranges = options.flatMap((o, i) => {
         const m = norm(o).match(/(\d+(?:\.\d+)?)\s*(?:a|-|to|ate)\s*(\d+(?:\.\d+)?)/);
-        if (m) return num >= +m[1] && num <= +m[2];
+        if (m) return num >= +m[1] && num <= +m[2] ? [i] : [];
         const plus = norm(o).match(/(\d+)\s*\+|mais de (\d+)|more than (\d+)|acima de (\d+)/);
-        if (plus) return num >= +(plus[1] || plus[2] || plus[3] || plus[4]);
+        if (plus) return num >= +(plus[1] || plus[2] || plus[3] || plus[4]) ? [i] : [];
         const less = norm(o).match(/menos de (\d+)|less than (\d+)|ate (\d+)|up to (\d+)/);
-        if (less) return num < +(less[1] || less[2] || less[3] || less[4]);
-        return false;
+        if (less) return num < +(less[1] || less[2] || less[3] || less[4]) ? [i] : [];
+        return [];
       });
+      if (ranges.length === 1) return ranges[0];
     }
-    return idx;
+    return -1;
   }
 
   // ---------------- leitura dos campos (rótulos acessíveis) ----------------
@@ -127,19 +181,23 @@
       if (type === "radio") {
         const name = el.name || el.id; if (!name || seen.has(name)) return; seen.add(name);
         const group = [...document.querySelectorAll(`input[type=radio][name="${CSS.escape(name)}"]`)];
-        const key = el.dataset.trk || newKey();
-        group.forEach((r, idx) => { r.dataset.trk = key; r.dataset.trkIdx = idx; });
         const opts = group.map(radioOptionLabel);
+        const label = groupQuestion(el);
+        const signature = `radio|${norm(label)}|${opts.map(norm).join(";")}`;
+        const key = el.dataset.trkSignature === signature && el.dataset.trk ? el.dataset.trk : newKey();
+        group.forEach((r, idx) => { r.dataset.trk = key; r.dataset.trkIdx = idx; r.dataset.trkSignature = signature; });
         const checked = group.find((r) => r.checked);
-        out.push({ key, label: groupQuestion(el), kind: "radio", options: opts, required: group.some((r) => r.required), current_value: checked ? opts[group.indexOf(checked)] : null });
+        out.push({ key, label, kind: "radio", options: opts, required: group.some((r) => r.required), current_value: checked ? opts[group.indexOf(checked)] : null });
         return;
       }
-      const key = el.dataset.trk || newKey();
-      el.dataset.trk = key;
       const kind = kindOf(el);
       const options = kind === "select" ? [...el.options].filter((o) => o.value && !/^(select|selecione|escolha|--)/i.test(o.text.trim())).map((o) => o.text.trim()) : [];
       const label = labelFor(el);
       if (!label) return;
+      const signature = `${kind}|${norm(label)}|${options.map(norm).join(";")}`;
+      const key = el.dataset.trkSignature === signature && el.dataset.trk ? el.dataset.trk : newKey();
+      el.dataset.trk = key;
+      el.dataset.trkSignature = signature;
       out.push({ key, label, kind, options, required: el.required || el.getAttribute("aria-required") === "true",
         current_value: kind === "checkbox" ? String(el.checked) : kind === "select" ? (el.value ? el.options[el.selectedIndex]?.text?.trim() : null) : kind === "file" ? (el.files?.length ? el.files[0].name : null) : el.value || null });
     });
@@ -231,8 +289,11 @@
     }
     if (field.kind === "typeahead") {
       typeInto(el, value);
-      await pickFromListbox(value);
-      return !!el.value || !!el.closest("[class*=select]")?.querySelector("[class*=single-value],[class*=singleValue]");
+      if (await pickFromListbox(value)) return true;
+      // An unmatched typed string is not a completed selection. Clear it so the
+      // form does not look complete when the ATS still requires a listbox item.
+      nativeSet(el, "");
+      return false;
     }
     if (field.kind === "date" && /^\d{2}\/\d{2}\/\d{4}$/.test(String(value))) {
       const [d, m, y] = String(value).split("/");
@@ -300,7 +361,7 @@
     try {
       const { filled } = await fillFields(todo, false);
       state.msg = filled ? `${filled} campo(s) preenchido(s) automaticamente. Confira antes de enviar.` : "Nada para preencher automaticamente aqui.";
-    } catch (e) { state.msg = `Não consegui preencher: ${e.message}`; }
+    } catch (e) { state.msg = `Não consegui preencher: ${explainError(e)}`; }
     state.busy = false;
     render();
   }
@@ -315,7 +376,7 @@
     try {
       const { filled } = await fillFields(pending, true);
       state.msg = filled ? `✨ ${filled} resposta(s) escritas pela IA (contorno azul). Leia e ajuste se precisar.` : "A IA não encontrou o que responder nos campos restantes.";
-    } catch (e) { state.msg = `A IA falhou: ${e.message}`; }
+    } catch (e) { state.msg = `A IA falhou: ${explainError(e)}`; }
     state.busy = false;
     render();
   }
@@ -505,34 +566,113 @@
       state.msg = silent ? state.msg : "Vaga salva e avaliada.";
       loadLogo();
       render();
-    } catch (e) { if (!silent) say(`Não foi possível avaliar: ${e.message}`); }
+    } catch (e) { if (!silent) say(`Não foi possível avaliar: ${explainError(e)}`); }
   }
 
   // ---------------- LinkedIn: importar as vagas da busca ----------------
-  const isLinkedinSearch = () => /linkedin\.com\/jobs\/(search|collections)/.test(location.href);
+  const isLinkedinSearch = () => /linkedin\.com\/jobs\/(?:search(?:-results)?|collections)(?:[/?#]|$)/i.test(location.href);
   function scrapeLinkedin() {
     const out = new Map();
-    document.querySelectorAll('a[href*="/jobs/view/"]').forEach((a) => {
-      const m = a.href.match(/\/jobs\/view\/(\d+)/);
-      if (!m || out.has(m[1])) return;
-      const card = a.closest("li, .job-card-container, [data-job-id], [data-occludable-job-id]") || a.parentElement;
-      const title = txt(a).split("\n")[0].replace(/\s+with verification$/i, "").trim();
+    const candidates = document.querySelectorAll(
+      'a[href*="/jobs/view/"], a[href*="currentJobId="], [data-job-id], [data-occludable-job-id]'
+    );
+    candidates.forEach((candidate) => {
+      const card = candidate.matches("a")
+        ? candidate.closest("li, .job-card-container, [data-job-id], [data-occludable-job-id]") || candidate.parentElement
+        : candidate;
+      const anchor = candidate.matches("a") ? candidate : card?.querySelector('a[href*="/jobs/view/"], a[href*="currentJobId="]');
+      if (!card || !anchor || !visible(card)) return;
+
+      const idSource = [candidate, card, anchor].map((el) =>
+        el.getAttribute("data-job-id") || el.getAttribute("data-occludable-job-id") || ""
+      ).find(Boolean) || "";
+      const href = anchor.href || "";
+      const id = href.match(/\/jobs\/view\/(\d+)/)?.[1]
+        || new URL(href, location.href).searchParams.get("currentJobId")
+        || idSource.match(/(\d{6,})/)?.[1];
+      if (!id || out.has(id)) return;
+
+      const titleNode = card.querySelector(
+        ".job-card-list__title, .job-card-container__link, [data-test-job-card-title]"
+      ) || anchor;
+      const title = (txt(titleNode) || titleNode.getAttribute("aria-label") || "")
+        .split("\n")[0].replace(/\s+with verification$/i, "").trim();
       if (!title) return;
-      const lines = (card?.innerText || "").split("\n").map((s) => s.trim()).filter((s) => s && s !== title);
-      const company = txt(card?.querySelector(".artdeco-entity-lockup__subtitle, .job-card-container__primary-description, .job-card-container__company-name")) || lines[0] || "";
-      const location_ = txt(card?.querySelector(".job-card-container__metadata-item, .artdeco-entity-lockup__caption")) || lines[1] || "";
-      out.set(m[1], { external_id: m[1], title, company, location: location_, easy_apply: /easy apply|candidatura simplificada/i.test(card?.innerText || ""), text: (card?.innerText || "").slice(0, 1500) });
+
+      const cardText = card.innerText || "";
+      const lines = cardText.split("\n").map((s) => s.trim()).filter((s) => s && s !== title);
+      const company = txt(card.querySelector(
+        '[data-test-job-card-company-name], .artdeco-entity-lockup__subtitle, .job-card-container__primary-description, .job-card-container__company-name'
+      )) || lines.find((line) => !/easy apply|candidatura simplificada|promoted|patrocinad[oa]|actively hiring|contratando ativamente/i.test(line)) || "";
+      const location_ = txt(card.querySelector(
+        '[data-test-job-card-location], .job-card-container__metadata-item, .artdeco-entity-lockup__caption'
+      )) || lines.find((line) => line !== company) || "";
+      out.set(id, {
+        external_id: id,
+        title,
+        company,
+        location: location_,
+        easy_apply: /easy apply|candidatura simplificada/i.test(cardText),
+        text: cardText.slice(0, 1500),
+      });
     });
     return [...out.values()];
   }
+  async function collectLinkedinJobs() {
+    const collected = new Map();
+    const rememberVisible = () => {
+      for (const job of scrapeLinkedin()) {
+        collected.set(job.external_id, job);
+        if (collected.size >= 200) break;
+      }
+    };
+    const firstCard = document.querySelector(
+      '.jobs-search-results-list li, .scaffold-layout__list li, [data-occludable-job-id], [data-job-id]'
+    );
+    const scrollableAncestors = [];
+    for (let node = firstCard?.parentElement; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      const range = node.scrollHeight - node.clientHeight;
+      if (range > 24 && /(auto|scroll)/.test(style.overflowY)) scrollableAncestors.push({ node, range });
+    }
+    const scroller = scrollableAncestors.sort((a, b) => b.range - a.range)[0]?.node ?? document.scrollingElement;
+    if (!scroller) return scrapeLinkedin();
+
+    let stableAtEnd = 0;
+    for (let page = 0; page < 60 && collected.size < 200; page++) {
+      rememberVisible();
+      const beforeCount = collected.size;
+      const beforeHeight = scroller.scrollHeight;
+      const beforeTop = scroller.scrollTop;
+      const step = Math.max(320, Math.floor(scroller.clientHeight * 0.72));
+      scroller.scrollTop = beforeTop + step;
+      if (scroller.scrollTop === beforeTop) {
+        const lastCard = document.querySelector(
+          '.jobs-search-results-list li:last-child, .scaffold-layout__list li:last-child, [data-occludable-job-id]:last-of-type, [data-job-id]:last-of-type'
+        );
+        lastCard?.scrollIntoView({ block: "end", behavior: "auto" });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      rememberVisible();
+      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 24;
+      const madeProgress = collected.size > beforeCount || scroller.scrollHeight > beforeHeight;
+      stableAtEnd = atEnd && !madeProgress ? stableAtEnd + 1 : 0;
+      if (stableAtEnd >= 3) break;
+    }
+    return [...collected.values()];
+  }
   async function importLinkedin() {
-    const jobs = scrapeLinkedin();
+    const jobs = await collectLinkedinJobs();
     if (!jobs.length) return say("Não encontrei vagas na lista. Role a lista para carregar e tente de novo.");
     say(`Importando ${jobs.length} vaga(s)…`);
     try {
       const r = await api("POST", "/import-list", { source: "linkedin", jobs });
-      say(`✓ ${r.created} nova(s) e ${r.existing} já conhecida(s). Elas aparecem em Vagas com nota em instantes. Role a lista para ver mais e importe de novo.`);
-    } catch (e) { say(`Erro ao importar: ${e.message}`); }
+      const accepted = (Number(r.created) || 0) + (Number(r.existing) || 0);
+      if (accepted < jobs.length) {
+        throw new Error(`${accepted} de ${jobs.length} cartões foram aceitos. Verifique se o LinkedIn exibiu o nome da empresa nos cartões.`);
+      }
+      say(`✓ ${accepted} cartão(ões) coletado(s): ${r.created} novo(s) e ${r.existing} já conhecido(s). A extensão percorreu a lista carregada (limite de 200); abra Vagas → Descobrir para revisar e selecionar quais entram na Fila.`);
+    } catch (e) { say(`Erro ao importar: ${explainError(e)}`); }
   }
 
   // ---------------- sugestão ao clicar num campo ----------------
@@ -606,7 +746,7 @@
         ai.onmousedown = async (ev) => {
           ev.preventDefault();
           label.textContent = "✨ Escrevendo…";
-          try { show(await api("POST", "/suggest", { url: location.href, job_id: jobId(), field, allow_ai: true }), true); } catch (er) { label.textContent = er.message; }
+          try { show(await api("POST", "/suggest", { url: location.href, job_id: jobId(), field, allow_ai: true }), true); } catch (er) { label.textContent = explainError(er); }
         };
         bubble.appendChild(ai);
       }
@@ -662,7 +802,7 @@
       session.set({ answers: [], submittedAppId: res.application_id, minimized: false });
       state.minimized = false; // confirmação importante: o painel abre para mostrar
       say(res.already ? "Esta candidatura já estava no seu acompanhamento." : "✓ Candidatura adicionada ao seu acompanhamento.");
-    } catch (e) { state.reported = false; say(`Erro ao registrar: ${e.message}`); }
+    } catch (e) { state.reported = false; say(`Erro ao registrar: ${explainError(e)}`); }
   }
 
   // ---------------- observação da página ----------------
@@ -693,13 +833,15 @@
       if (discovery && !linkedinDiscoveryRunning) {
         linkedinDiscoveryRunning = true;
         let jobs = [];
-        for (let attempt = 0; attempt < 30 && !jobs.length; attempt++) {
-          jobs = scrapeLinkedin();
-          if (!jobs.length) await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
+        let imported = { created: 0, existing: 0 };
+        jobs = await collectLinkedinJobs();
         try {
           if (!jobs.length) throw new Error("nenhuma vaga visível; verifique se a sessão do LinkedIn está conectada");
-          const imported = await api("POST", "/import-list", { source: "linkedin", jobs });
+          imported = await api("POST", "/import-list", { source: "linkedin", jobs });
+          const accepted = (Number(imported.created) || 0) + (Number(imported.existing) || 0);
+          if (accepted < jobs.length) {
+            throw new Error(`${accepted} de ${jobs.length} cartões foram aceitos. O LinkedIn pode não estar mostrando o nome da empresa nos demais cartões.`);
+          }
           await bg({
             type: "linkedinDiscoveryComplete",
             count: jobs.length,
@@ -707,7 +849,13 @@
             existing: imported.existing,
           });
         } catch (error) {
-          await bg({ type: "linkedinDiscoveryComplete", error: error.message });
+          await bg({
+            type: "linkedinDiscoveryComplete",
+            count: jobs.length,
+            created: Number(imported.created) || 0,
+            existing: Number(imported.existing) || 0,
+            error: explainError(error),
+          });
         }
         return;
       }

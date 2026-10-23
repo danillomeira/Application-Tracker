@@ -65,6 +65,21 @@ class JobSourceOut(BaseModel):
     seen_at: datetime
 
 
+class JobQualityCheck(BaseModel):
+    key: str
+    label: str
+    status: Literal["ok", "warning", "risk", "unknown"]
+    detail: str
+    scoreable: bool = True
+
+
+class JobQualityOut(BaseModel):
+    score: int
+    summary: str
+    score_explanation: str
+    checks: list[JobQualityCheck]
+
+
 class ScoreOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     chance: float
@@ -114,6 +129,7 @@ class JobDetail(JobOut):
     benefits: list[str]
     recruiter: dict[str, Any] | None
     extra: dict[str, Any]
+    quality: JobQualityOut
     sources: list[JobSourceOut] = Field(default_factory=list)
     snapshots: list[dict[str, Any]] = Field(default_factory=list)
 

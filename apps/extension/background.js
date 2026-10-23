@@ -3,6 +3,7 @@ const DEFAULTS = { apiUrl: "http://localhost:8000", token: "", enabled: true, au
 const logos = new Map(); // cache por empresa durante a sessão do navegador
 const DISCOVERY_ALARM = "tracker-linkedin-discovery";
 const DISCOVERY_TIMEOUT_PREFIX = "tracker-linkedin-timeout-";
+const DISCOVERY_TIMEOUT_MINUTES = 10;
 
 async function config() {
   const c = await chrome.storage.sync.get(DEFAULTS);
@@ -114,7 +115,7 @@ async function pollLinkedinDiscoveries() {
         tab = await chrome.tabs.create({ url: "about:blank", active: false });
         discoveryTabs[String(tab.id)] = search;
         await chrome.storage.local.set({ discoveryTabs });
-        await chrome.alarms.create(`${DISCOVERY_TIMEOUT_PREFIX}${tab.id}`, { delayInMinutes: 2 });
+        await chrome.alarms.create(`${DISCOVERY_TIMEOUT_PREFIX}${tab.id}`, { delayInMinutes: DISCOVERY_TIMEOUT_MINUTES });
         await chrome.tabs.update(tab.id, { url: search.url });
       } catch (error) {
         if (tab?.id != null) await finishDiscovery(tab.id, { error: String(error.message || error) });
@@ -150,11 +151,38 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete" || !tab.url) return;
-  if (/linkedin\.com\/jobs\/(search|collections)/i.test(tab.url)) return;
+  // A discovery tab is created at about:blank before navigating to LinkedIn.
+  // Ignore that initial completion; it is not a LinkedIn redirect.
+  if (!/^https?:\/\//i.test(tab.url)) return;
+
+  let currentUrl;
+  try {
+    currentUrl = new URL(tab.url);
+  } catch {
+    return;
+  }
+
+  const isLinkedin = currentUrl.hostname === "linkedin.com" || currentUrl.hostname.endsWith(".linkedin.com");
+  const isJobsSearch = /^\/jobs\/(search(?:-results)?|collections)(?:\/|$)/i.test(currentUrl.pathname);
+  if (isLinkedin && isJobsSearch) return;
+
   void chrome.storage.local.get("discoveryTabs").then(({ discoveryTabs = {} }) => {
-    if (discoveryTabs[String(tabId)]) {
-      void finishDiscovery(tabId, { error: "O LinkedIn redirecionou para login ou outra página. Entre na sua conta e tente novamente." });
+    const search = discoveryTabs[String(tabId)];
+    if (!search) return;
+
+    // LinkedIn can route unauthenticated users through several intermediate
+    // pages (not all of them have /login in the path). Keep its page open so the
+    // user can authenticate; its redirect should return to the requested search.
+    if (isLinkedin) {
+      void chrome.alarms.create(`${DISCOVERY_TIMEOUT_PREFIX}${tabId}`, { delayInMinutes: DISCOVERY_TIMEOUT_MINUTES });
+      void chrome.tabs.update(tabId, { active: true }).catch(() => {});
+      void chrome.action.setBadgeText({ text: "!" });
+      void chrome.action.setBadgeBackgroundColor({ color: "#0284c7" });
+      return;
     }
+
+    const destination = `${currentUrl.hostname}${currentUrl.pathname}`.slice(0, 160);
+    void finishDiscovery(tabId, { error: `O navegador saiu do LinkedIn para ${destination}. Verifique a sessão e tente novamente.` });
   });
 });
 chrome.tabs.onRemoved.addListener((tabId) => {

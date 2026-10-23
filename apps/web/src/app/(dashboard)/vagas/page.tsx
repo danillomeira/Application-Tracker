@@ -1,7 +1,7 @@
 "use client";
 
 import { CompanyLogo } from "@/components/brand";
-import { Ban, Briefcase, Check, Clock3, Eye, Globe2, Linkedin, Plus, Radio, Search, SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
+import { Ban, Briefcase, Check, ChevronLeft, ChevronRight, Clock3, Eye, Globe2, Linkedin, Plus, Radio, Search, SlidersHorizontal, Sparkles, Star, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -61,6 +61,8 @@ type LinkedinDiscoveryStatus = {
     error: string | null;
   } | null;
 };
+
+const DISCOVERY_PAGE_SIZE = 30;
 
 const COMPANY_FLAGS = [
   { key: "is_monitored", label: "Monitorar vagas", icon: Radio, active: "bg-primary" },
@@ -140,18 +142,28 @@ function Discover() {
   const [customSourceUrl, setCustomSourceUrl] = useState("");
   const [selectedSearchId, setSelectedSearchId] = useState("");
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [discoveryPage, setDiscoveryPage] = useState(0);
   const queryClient = useQueryClient();
   const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const { data: savedSearches } = useGet<Search[]>(["searches"], "/api/v1/saved-searches");
   const linkedinStatus = useGet<LinkedinDiscoveryStatus>(["linkedin-discovery-status"], "/api/v1/assistant/discovery/status", { refetchInterval: 30_000 });
-  const linkedinCompletedAt = linkedinStatus.data?.last_result?.status === "completed"
-    ? linkedinStatus.data.last_result.completed_at
+  const linkedinResult = linkedinStatus.data?.last_result;
+  const linkedinRefreshAt = linkedinResult
+    && (linkedinResult.status === "completed" || linkedinResult.created > 0 || linkedinResult.existing > 0)
+    ? linkedinResult.completed_at
     : null;
   useEffect(() => {
-    if (linkedinCompletedAt) void queryClient.invalidateQueries({ queryKey: ["keyword-search-jobs"] });
-  }, [linkedinCompletedAt, queryClient]);
+    if (linkedinRefreshAt) void queryClient.invalidateQueries({ queryKey: ["keyword-search-jobs"] });
+  }, [linkedinRefreshAt, queryClient]);
+  useEffect(() => {
+    setDiscoveryPage(0);
+  }, [form.query, form.country, form.workModel]);
   const create = useSend<SearchInput, Search>("POST", "/api/v1/saved-searches", { success: "Busca salva", invalidate: [["searches"]] });
-  const update = useSend<{ id: string; body: SearchInput }, Search>("PUT", (value) => `/api/v1/saved-searches/${value.id}`, { success: "Busca atualizada", invalidate: [["searches"]] });
+  const update = useSend<{ id: string; body: SearchInput }, Search>("PUT", (value) => `/api/v1/saved-searches/${value.id}`, {
+    success: "Busca atualizada",
+    invalidate: [["searches"]],
+    requestBody: (value) => value.body,
+  });
   const run = useSend<string, { task_id: string }>("POST", (id) => `/api/v1/saved-searches/${id}/run`);
   const selectJobs = useSend<{ job_ids: string[] }, { selected: number }>("POST", "/api/v1/jobs/select", {
     success: "Vagas selecionadas enviadas para a fila",
@@ -161,7 +173,13 @@ function Discover() {
     void queryClient.invalidateQueries({ queryKey: ["keyword-search-jobs"] });
     void queryClient.invalidateQueries({ queryKey: ["discovery-suggestions"] });
   });
-  const jobParams = new URLSearchParams({ status: "open", triage: "discovered", sort: "recent", limit: "30" });
+  const jobParams = new URLSearchParams({
+    status: "open",
+    triage: "discovered",
+    sort: "recent",
+    limit: String(DISCOVERY_PAGE_SIZE + 1),
+    offset: String(discoveryPage * DISCOVERY_PAGE_SIZE),
+  });
   if (form.query.trim()) jobParams.set("q", form.query.trim());
   if (form.country.trim()) jobParams.set("location", form.country.trim());
   if (form.workModel) jobParams.set("work_model", form.workModel);
@@ -169,7 +187,9 @@ function Discover() {
     ["keyword-search-jobs", jobParams.toString()],
     `/api/v1/jobs?${jobParams}`,
   );
-  const visibleJobs = matchingJobs.data ?? [];
+  const pageResults = matchingJobs.data ?? [];
+  const visibleJobs = pageResults.slice(0, DISCOVERY_PAGE_SIZE);
+  const hasNextPage = pageResults.length > DISCOVERY_PAGE_SIZE;
   const allVisibleSelected = visibleJobs.length > 0 && visibleJobs.every((job) => selectedJobIds.includes(job.id));
   const toggleJobSelection = (jobId: string) => {
     if (!selectedJobIds.includes(jobId) && selectedJobIds.length >= 200) {
@@ -499,7 +519,7 @@ function Discover() {
                 {result && (
                   <p className={result.status === "failed" ? "text-danger" : "text-muted-foreground"}>
                     {result.status === "running" && `Buscando “${result.search_name}”…`}
-                    {result.status === "completed" && `“${result.search_name}”: ${result.created} nova(s), ${result.existing} já conhecida(s).`}
+                    {result.status === "completed" && `“${result.search_name}”: ${result.count} cartão(ões) capturado(s) ao percorrer a lista — ${result.created} novo(s), ${result.existing} já conhecido(s). O LinkedIn pode ter mais resultados que os capturados.`}
                     {result.status === "failed" && `“${result.search_name}” não foi concluída: ${result.error ?? "erro da extensão"}`}
                   </p>
                 )}
@@ -515,14 +535,17 @@ function Discover() {
             <p className="mt-1 text-xs text-muted-foreground">As vagas coletadas ficam aqui. Só as que você selecionar entram na Fila.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">{visibleJobs.length} para revisar · {selectedJobIds.length} selecionada(s)</span>
+            <span className="text-sm text-muted-foreground">
+              {visibleJobs.length ? `Mostrando ${discoveryPage * DISCOVERY_PAGE_SIZE + 1}–${discoveryPage * DISCOVERY_PAGE_SIZE + visibleJobs.length}` : "0 nesta página"}
+              {" · "}{selectedJobIds.length} selecionada(s)
+            </span>
             {visibleJobs.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={toggleVisibleJobs}
               >
-                {allVisibleSelected ? "Desmarcar resultados" : "Selecionar resultados"}
+                {allVisibleSelected ? "Desmarcar esta página" : "Selecionar esta página"}
               </Button>
             )}
             <Button size="sm" disabled={!selectedJobIds.length || selectJobs.isPending} onClick={() => void submitSelectedJobs()}>
@@ -544,6 +567,29 @@ function Discover() {
             ))}
           </Stagger>
         ) : <EmptyState icon={<Search size={22} />} title={form.query.trim() ? "Nenhuma vaga para revisar" : "Nenhuma vaga aguardando seleção"}>{form.query.trim() ? "Clique em “Buscar vagas agora” para consultar as fontes selecionadas. Os resultados ficam aqui para você escolher quais vão para a Fila." : "Inicie uma busca para encontrar vagas. Elas só entram na Fila quando você as selecionar aqui."}</EmptyState>}
+        {(discoveryPage > 0 || hasNextPage) && (
+          <nav aria-label="Paginação das vagas para revisar" className="mt-4 flex items-center justify-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Página anterior"
+              disabled={discoveryPage === 0 || matchingJobs.isFetching}
+              onClick={() => setDiscoveryPage((current) => Math.max(0, current - 1))}
+            >
+              <ChevronLeft size={15} /> Anterior
+            </Button>
+            <span className="text-sm text-muted-foreground">Página {discoveryPage + 1}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Próxima página"
+              disabled={!hasNextPage || matchingJobs.isFetching}
+              onClick={() => setDiscoveryPage((current) => current + 1)}
+            >
+              Próxima <ChevronRight size={15} />
+            </Button>
+          </nav>
+        )}
       </div>
       <JobDrawer job={openJob} onClose={() => setOpenJob(null)} />
     </div>
@@ -759,7 +805,10 @@ function Companies() {
   const [companySort, setCompanySort] = useState("name");
   const [form, setForm] = useState({ name: "", ats_kind: "greenhouse", ats_board_token: "", is_monitored: true, is_watchlisted: false });
   const create = useSend("POST", "/api/v1/companies", { success: "Empresa adicionada", invalidate: [["companies"]] });
-  const update = useSend<{ id: string; body: Partial<Company> }>("PUT", (v) => `/api/v1/companies/${v.id}`, { invalidate: [["companies"]] });
+  const update = useSend<{ id: string; body: Partial<Company> }>("PUT", (v) => `/api/v1/companies/${v.id}`, {
+    invalidate: [["companies"]],
+    requestBody: (value) => value.body,
+  });
   const poll = useSend<string>("POST", (id) => `/api/v1/companies/${id}/poll`, { success: "Coleta agendada" });
   const seed = useSend<void, { added: number }>("POST", "/api/v1/companies/seed-defaults", { invalidate: [["companies"]] });
   const companies = data ?? [];

@@ -47,7 +47,7 @@ Convenções:
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/jobs?quadrant=&status=&q=&sort=priority` | |
-| GET | `/jobs/{id}` | Inclui score, fontes, snapshots |
+| GET | `/jobs/{id}` | Inclui score, fontes, snapshots e checkup de completude/consistência; não atesta legitimidade |
 | POST | `/jobs/import` | `{url}` ou `{text}` (202) |
 | POST | `/jobs/{id}/feedback` | `{verdict, reason}` |
 | POST | `/jobs/{id}/rescore` | |

@@ -20,11 +20,13 @@ from tracker.modules.applications import service as app_service
 from tracker.modules.applications.models import Application
 from tracker.modules.companies.models import Company
 from tracker.modules.jobs.models import Job, JobFeedback, JobSnapshot, JobSource, SavedSearch
+from tracker.modules.jobs.quality import assess_job_quality
 from tracker.modules.jobs.schemas import (
     FeedbackIn,
     JobDetail,
     JobImportIn,
     JobOut,
+    JobQualityOut,
     JobSourceOut,
     SavedSearchIn,
     SavedSearchOut,
@@ -41,9 +43,20 @@ class SelectDiscoveredIn(BaseModel):
 
 
 def _job_out(
-    job: Job, company: Company | None, score: JobScore | None, app: Application | None, cls: type[JobOut] = JobOut
+    job: Job,
+    company: Company | None,
+    score: JobScore | None,
+    app: Application | None,
+    cls: type[JobOut] = JobOut,
+    quality: JobQualityOut | None = None,
 ) -> Any:
-    out = cls.model_validate(job)
+    if cls is JobDetail:
+        if quality is None:
+            raise ValueError("JobDetail requires a quality assessment")
+        job_data = {column.key: getattr(job, column.key) for column in Job.__mapper__.column_attrs}
+        out = cls.model_validate({**job_data, "quality": quality})
+    else:
+        out = cls.model_validate(job)
     out.company_name = company.name if company else None
     out.score = ScoreOut.model_validate(score) if score else None
     out.application_id = app.id if app else None
@@ -92,11 +105,23 @@ async def list_jobs(
     if company_id:
         stmt = stmt.where(Job.company_id == company_id)
     if q:
-        like = f"%{q}%"
-        source_match = exists(
-            select(JobSource.id).where(JobSource.job_id == Job.id, JobSource.raw.cast(Text).ilike(like))
+        terms = [term for term in q.split() if term]
+        stmt = stmt.where(
+            and_(
+                *(
+                    Job.title.ilike(f"%{term}%")
+                    | Company.name.ilike(f"%{term}%")
+                    | Job.description_text.ilike(f"%{term}%")
+                    | exists(
+                        select(JobSource.id).where(
+                            JobSource.job_id == Job.id,
+                            JobSource.raw.cast(Text).ilike(f"%{term}%"),
+                        )
+                    )
+                    for term in terms
+                )
+            )
         )
-        stmt = stmt.where(Job.title.ilike(like) | Company.name.ilike(like) | Job.description_text.ilike(like) | source_match)
     if company:
         stmt = stmt.where(Job.company_id.in_(company))
     for t in tech or []:  # cada tecnologia precisa aparecer nos requisitos ou na descrição
@@ -209,15 +234,28 @@ async def get_job(job_id: uuid.UUID, session: SessionDep, _user: CurrentUser) ->
     company = await session.get(Company, job.company_id)
     score = await session.scalar(select(JobScore).where(JobScore.job_id == job.id, JobScore.is_current.is_(True)))
     app = await app_service.get_for_job(session, job.id)
-    out: JobDetail = _job_out(job, company, score, app, JobDetail)
-    out.sources = [
-        JobSourceOut.model_validate(s) for s in (await session.scalars(select(JobSource).where(JobSource.job_id == job.id))).all()
-    ]
+    sources = list((await session.scalars(select(JobSource).where(JobSource.job_id == job.id))).all())
+    snapshots = list(
+        (
+            await session.scalars(
+                select(JobSnapshot).where(JobSnapshot.job_id == job.id).order_by(JobSnapshot.captured_at)
+            )
+        ).all()
+    )
+    quality = JobQualityOut.model_validate(
+        assess_job_quality(
+            job,
+            sources,
+            snapshots,
+            chance_breakdown=score.chance_breakdown if score else None,
+            company_name=company.name if company else None,
+        )
+    )
+    out: JobDetail = _job_out(job, company, score, app, JobDetail, quality)
+    out.sources = [JobSourceOut.model_validate(source) for source in sources]
     out.snapshots = [
         {"id": str(s.id), "reason": s.reason, "captured_at": s.captured_at.isoformat(), "sha256": s.sha256}
-        for s in (
-            await session.scalars(select(JobSnapshot).where(JobSnapshot.job_id == job.id).order_by(JobSnapshot.captured_at))
-        ).all()
+        for s in snapshots
     ]
     return out
 

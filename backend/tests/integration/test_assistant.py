@@ -14,8 +14,9 @@ from tracker.integrations.claude.client import FakeAIClient
 from tracker.modules.applications.models import Application
 from tracker.modules.assistant import service
 from tracker.modules.assistant.router import linkedin_search_url
+from tracker.modules.companies.models import Company
 from tracker.modules.jobs import service as job_service
-from tracker.modules.jobs.models import SavedSearch
+from tracker.modules.jobs.models import Job, JobSource, SavedSearch
 from tracker.modules.jobs.normalize import RawJob
 from tracker.modules.jobs.tasks import run_saved_search
 from tracker.modules.profile.models import AnswerBankEntry
@@ -408,6 +409,26 @@ async def test_linkedin_list_import_then_enrich_on_open(anon_client: AsyncClient
     assert r.status_code == 200 and r.json()["requirements"]["must"] == ["Python", "Spark"]
     r = await anon_client.post("/api/v1/assistant/page", headers=H, json=page)
     assert r.json()["needs_details"] is False  # completa: não pede de novo
+
+
+async def test_linkedin_list_import_keeps_job_when_company_is_missing(anon_client: AsyncClient, session, dispatched) -> None:
+    await _auth(session)
+    await factories.seed_master(session)
+    response = await anon_client.post(
+        "/api/v1/assistant/import-list",
+        headers=H,
+        json={"source": "linkedin", "jobs": [{"external_id": "4044444444", "title": "Go Job Offer", "company": ""}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"created": 1, "existing": 0}
+    source = await session.scalar(select(JobSource).where(JobSource.external_id == "4044444444"))
+    assert source is not None and source.raw["company_missing"] is True
+    job = await session.get(Job, source.job_id)
+    assert job is not None
+    company = await session.get(Company, job.company_id)
+    assert company is not None and company.name == "Empresa não informada"
+    assert [d for d in dispatched if d[0] == "ai.process_job"]
 
 
 async def test_linkedin_alert_email_becomes_jobs_without_ai(session, ai: FakeAIClient, dispatched) -> None:

@@ -313,8 +313,9 @@ async def import_list(body: ImportListIn, session: SessionDep, _a: Auth) -> dict
     Sem robô: a extensão só lê o que já está na sua tela. A descrição completa chega quando você abre a vaga."""
     created = existing = 0
     for item in body.jobs:
-        if not item.title.strip() or not item.company.strip():
+        if not item.title.strip():
             continue
+        company_missing = not item.company.strip()
         url = f"https://www.linkedin.com/jobs/view/{item.external_id}/"
         job, is_new = await job_service.upsert_job(
             session,
@@ -322,12 +323,13 @@ async def import_list(body: ImportListIn, session: SessionDep, _a: Auth) -> dict
                 source="linkedin",
                 external_id=item.external_id,
                 title=item.title.strip(),
-                company_name=item.company.strip(),
+                company_name=item.company.strip() or "Empresa não informada",
                 url=url,
                 location=item.location,
                 description_text=item.text,
                 apply_url=url,
                 apply_kind="easy_apply" if item.easy_apply else "unknown",
+                raw={"company_missing": company_missing},
             ),
         )
         await session.commit()

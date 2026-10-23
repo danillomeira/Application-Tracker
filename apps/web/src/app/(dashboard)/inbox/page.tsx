@@ -4,7 +4,7 @@ import { Inbox as InboxIcon } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Tabs, Textarea } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, SkeletonList, Tabs, Textarea } from "@/components/ui";
 import { useGet, useSend } from "@/lib/hooks";
 import { EMAIL_LABEL } from "@/lib/labels";
 import { formatDateTime } from "@/lib/utils";
@@ -51,7 +51,7 @@ function Inbox() {
 
 function Emails() {
   const [filter, setFilter] = useState("");
-  const { data } = useGet<Email[]>(["inbox", filter], `/api/v1/inbox${filter ? `?link_status=${filter}` : ""}`);
+  const { data, isLoading } = useGet<Email[]>(["inbox", filter], `/api/v1/inbox${filter ? `?link_status=${filter}` : ""}`);
   const { data: apps } = useGet<AppLite[]>(["applications", "lite"], "/api/v1/applications?include_closed=false");
   const link = useSend<{ id: string; application_id: string }>("POST", (v) => `/api/v1/inbox/${v.id}/link`, { success: "Associado", invalidate: [["inbox"], ["applications"]] });
   const reclass = useSend<{ id: string; label: string }>("POST", (v) => `/api/v1/inbox/${v.id}/reclassify`, { success: "Rótulo corrigido", invalidate: [["inbox"]] });
@@ -62,7 +62,7 @@ function Emails() {
         <option value="ambiguous">Precisam de associação</option>
         <option value="auto">Associados automaticamente</option>
       </Select>
-      {!data?.length ? (
+      {isLoading ? <SkeletonList count={4} /> : !data?.length ? (
         <EmptyState title="Nenhum e-mail ainda">Conecte o Google em Configurações → Integrações.</EmptyState>
       ) : (
         data.map((e) => (
@@ -98,7 +98,7 @@ function Emails() {
 }
 
 function Drafts() {
-  const { data } = useGet<Draft[]>(["drafts"], "/api/v1/drafts?status=proposed");
+  const { data, isLoading } = useGet<Draft[]>(["drafts"], "/api/v1/drafts?status=proposed");
   const [edit, setEdit] = useState<Draft | null>(null);
   const inv = { invalidate: [["drafts"], ["dashboard"]] };
   const save = useSend<Draft>("PUT", (d) => `/api/v1/drafts/${d.id}`, { success: "Salvo", ...inv });
@@ -108,7 +108,7 @@ function Drafts() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">O sistema nunca envia e-mails nem mensagens por você: aqui ficam rascunhos para revisar.</p>
-      {!data?.length ? (
+      {isLoading ? <SkeletonList count={3} /> : !data?.length ? (
         <EmptyState title="Nenhum rascunho pendente" />
       ) : (
         data.map((d) => (
@@ -147,8 +147,8 @@ function Drafts() {
 }
 
 function LinkedIn() {
-  const { data } = useGet<LiMsg[]>(["inbox", "linkedin"], "/api/v1/inbox/linkedin-messages");
-  return !data?.length ? (
+  const { data, isLoading } = useGet<LiMsg[]>(["inbox", "linkedin"], "/api/v1/inbox/linkedin-messages");
+  return isLoading ? <SkeletonList count={3} /> : !data?.length ? (
     <EmptyState title="Nenhuma mensagem lida ainda">O robô lê as conversas novas quando chega notificação do LinkedIn no Gmail.</EmptyState>
   ) : (
     <div className="space-y-2">

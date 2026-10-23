@@ -68,7 +68,7 @@ Ordem (a primeira que resolver com confiança suficiente vence):
 
 1. **Campos de perfil**: nome, e-mail, telefone, cidade, LinkedIn, GitHub, portfólio → direto do mestre.
 2. **Banco de respostas, correspondência exata**: pergunta normalizada (minúsculas, sem acentos e pontuação) igual a `canonical_question` ou a um alias, respeitando `conditions` (idioma da vaga, regime).
-3. **Banco de respostas, semântica**: similaridade de embedding ≥ 0,90 com o mesmo `field_kind`. Opções de select/radio mapeadas por similaridade de texto.
+3. **Banco de respostas, semântica**: similaridade de embedding ≥ 0,90 com o mesmo `field_kind`. Opções de select/radio mapeadas por similaridade de texto; se mais de uma opção puder corresponder, deixar pendente para revisão.
 4. **Regras determinísticas** (`apply/rules.py`):
    - "Quantos anos de experiência com X?" → soma dos períodos das experiências que usam a skill X (pelo mestre), arredondada para baixo. Se X não estiver no mestre → **0** (nunca inventar), e a vaga recebe flag de gap
    - "Você fala inglês/espanhol?" → `languages` do mestre

@@ -129,6 +129,12 @@ def test_features_ranges_and_monotonic() -> None:
     f2, _ = F.responsividade(10, 8)
     assert f2.value > f.value and _["confidence"] == "alta"
     assert F.nao_fantasma(3, 90, True, True).value == 0.0
+    transparent = F.nao_fantasma(0, 12, False, None)
+    assert transparent.value == 1.0 and transparent.missing
+    assert "repostagem: 0" in transparent.evidence
+    assert "sinal acima de 60; não atingido" in transparent.evidence
+    assert "informação sobre demissões recentes indisponível" in transparent.evidence
+    assert "não confirma se a vaga é real" in transparent.evidence
     assert F.remuneracao({"max": 24000, "period": "month"}, 20000, True).value == 1.0
     assert F.remuneracao({"max": 15000, "period": "month"}, 20000, True).value == 0.0
 

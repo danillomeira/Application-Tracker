@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tracker.core import settings_store
+from tracker.core.humanize import humanize
 from tracker.integrations.claude.client import AIError, AIRequest, get_ai, load_prompt, sessionmaker_from
 from tracker.integrations.embeddings import cosine, embed_one, normalize_text
 from tracker.modules.applications.models import Application, ApplicationAnswer, PendingQuestion
@@ -531,6 +532,10 @@ async def resolve_core(
     for f in unresolved:
         a = answers.get(f.key)
         v = _ai_value(f, a) if a else None
+        if v is not None and f.kind in ("text", "textarea"):
+            v = humanize(str(v))
+            if a is not None:
+                a = a.model_copy(update={"value": v})
         if v is not None and not str(v).strip():
             v = None  # a IA disse que não se aplica ou que o dado não está no perfil: fica para você
         ok_text = v is not None and (f.kind not in ("text", "textarea") or validate_free_text(str(v), master).passed)

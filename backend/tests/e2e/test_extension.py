@@ -159,6 +159,14 @@ async def test_extension_end_to_end(servers, session, tmp_path) -> None:
             await page.wait_for_timeout(400)
             await page.click("#phone")
             await page.get_by_text("💡").wait_for(timeout=10000)
+            # a sugestão é uma bolha pequena e escura, nunca um quadro esticado por cima do formulário
+            box = await page.evaluate(
+                "(() => { const b = [...document.querySelectorAll('div[role=dialog]')].find(d => d.textContent.includes('💡'));"
+                " const r = b.getBoundingClientRect(); return {w: r.width, h: r.height, bg: getComputedStyle(b).backgroundColor}; })()"
+            )
+            assert box["h"] < 120 and box["w"] <= 400 and box["bg"] == "rgb(15, 23, 42)", box
+            if os.environ.get("SHOT_DIR"):
+                await page.screenshot(path=os.path.join(os.environ["SHOT_DIR"], "bubble.png"))
             await page.get_by_role("button", name="Usar").dispatch_event("mousedown")
             await page.wait_for_function("document.getElementById('phone').value.length > 5", timeout=5000)
 

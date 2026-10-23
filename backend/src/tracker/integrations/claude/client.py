@@ -94,9 +94,17 @@ class AIClient(Protocol):
     async def structured[T: BaseModel](self, req: AIRequest, output: type[T]) -> AIResult[T]: ...
 
 
+# tarefas que escrevem em nome do usuário: recebem as regras de estilo "não parecer IA"
+WRITING_TASKS = {"apply.answer", "resume.cover_letter", "draft.followup", "draft.linkedin_note", "draft.reply",
+                 "draft.thank_you", "offer.negotiation"}  # fmt: skip
+
+
 def load_prompt(task: str, version: str = "v1") -> str:
+    from tracker.core.humanize import HUMAN_STYLE
+
     path = PROMPTS_DIR / task.replace(".", "_") / f"{version}.md"
-    return path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    return text + "\n" + HUMAN_STYLE if task in WRITING_TASKS else text
 
 
 @functools.cache

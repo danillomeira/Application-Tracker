@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 
 from tracker.core import events, settings_store
+from tracker.core.humanize import humanize
 from tracker.integrations.claude.client import AIClient, AIError, AIRequest, get_ai, load_prompt
 from tracker.modules.jobs.models import Job
 from tracker.modules.profile import service as profile_service
@@ -224,6 +225,7 @@ async def generate_cover_letter(sm: SM, job_id: str, variant_id: str | None) -> 
             ),
             CoverLetter,
         )
+        res.output.text = humanize(res.output.text)
         report = validate_free_text(res.output.text, master, "carta")
         if report.passed:
             return res.output

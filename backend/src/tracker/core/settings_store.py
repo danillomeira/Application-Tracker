@@ -30,6 +30,10 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "resume": {
         "match_threshold": 0.75,
         "tailored_requires_approval": True,
+        # CV sob medida: "medium" responde em ~metade do tempo de "high" com o mesmo validador de fatos
+        "tailor_effort": "medium",
+        # ao abrir o formulário de uma vaga top/aposta, a extensão já começa a gerar o CV sob medida
+        "auto_tailor_on_apply": True,
         "default_template": "classic",
     },
     "tracking": {"ghost_after_days": 21, "followup_after_days": 8},

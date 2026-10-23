@@ -415,6 +415,85 @@ def _ai_value(f: FormField, a: BatchItem) -> Any | None:
     return _finalize(f, value)
 
 
+# ---------- "Qual é o seu atual ou último trabalho?" (Empresa, Posição, De, Até, trabalho atual) ----------
+COMPANY_LBL = re.compile(r"^(nome da )?(empresa|company|employer|empregador|organizacao|organization)( atual| name)?$")
+POSITION_LBL = re.compile(r"^(posicao|cargo|position|job title|title|funcao|role|cargo atual)$")
+FROM_LBL = re.compile(r"^(de|from|desde|inicio|data de inicio|start|start date|data inicial|mes de inicio)$")
+TO_LBL = re.compile(r"^(ate|to|fim|termino|data de (fim|saida|termino)|end|end date|data final)$")
+CURRENT_LBL = re.compile(
+    r"(este e o meu trabalho atual|trabalho aqui atualmente|emprego atual|current (job|position|role)"
+    r"|i currently work|currently work here)"
+)
+FIRST_JOB_RE = re.compile(
+    r"(primeiro (emprego|trabalho)|first (job|paid job|employment)).{0,40}(ano|year)"
+    r"|(ano|year).{0,40}(primeiro (emprego|trabalho)|first job)"
+)
+
+
+def _clean(label: str) -> str:
+    return normalize_text(re.sub(r"[*:]+\s*$", "", label)).strip()
+
+
+def current_job(master: MasterProfile) -> Any | None:
+    jobs = [e for e in master.experience if e.type == "employment" and e.start]
+    if not jobs:
+        return None
+    return max(jobs, key=lambda e: ((e.end is None), facts.parse_month(e.end) or facts.parse_month(e.start)))
+
+
+def _title_for(exp: Any, job: Job) -> str:
+    """Cargo do mestre (ou alternativa) que mais se parece com o da vaga."""
+    opts = [exp.title, *(exp.title_alternatives or [])]
+    words = set(normalize_text(job.title or "").split())
+    return max(opts, key=lambda o: len(set(normalize_text(o).split()) & words)) if words else exp.title
+
+
+def _date_value(value: str | None, kind: str) -> str | None:
+    d = facts.parse_month(value)
+    if d is None:
+        return None
+    if kind == "date":
+        return f"01/{d.month:02d}/{d.year}"
+    if kind == "month":
+        return f"{d.year}-{d.month:02d}"
+    if kind == "number":
+        return str(d.year)
+    return f"{d.month:02d}/{d.year}"
+
+
+def job_history(fields: list[FormField], master: MasterProfile, job: Job) -> tuple[dict[str, Any], set[str]]:
+    """Valores do bloco de emprego atual e campos que ficam vazios de propósito (ex.: "Até" do emprego atual)."""
+    values: dict[str, Any] = {}
+    leave_empty: set[str] = set()
+    starts = [d for e in master.experience if e.type in facts.PROFESSIONAL_TYPES and (d := facts.parse_month(e.start))]
+    for f in fields:
+        if FIRST_JOB_RE.search(normalize_text(f.label)) and starts and f.kind not in ("radio", "checkbox"):
+            values[f.key] = str(min(starts).year)
+    if not any(COMPANY_LBL.match(_clean(f.label)) for f in fields):
+        return values, leave_empty
+    exp = current_job(master)
+    if exp is None:
+        return values, leave_empty
+    is_current = exp.end is None
+    for f in fields:
+        lab = _clean(f.label)
+        if COMPANY_LBL.match(lab) and f.kind in ("text", "typeahead"):
+            values[f.key] = exp.organization_short or exp.organization
+        elif POSITION_LBL.match(lab) and f.kind in ("text", "typeahead"):
+            values[f.key] = _title_for(exp, job)
+        elif FROM_LBL.match(lab):
+            if (v := _date_value(exp.start, f.kind)) is not None:
+                values[f.key] = v
+        elif TO_LBL.match(lab):
+            if is_current:
+                leave_empty.add(f.key)
+            elif (v := _date_value(exp.end, f.kind)) is not None:
+                values[f.key] = v
+        elif f.kind == "checkbox" and CURRENT_LBL.search(lab):
+            values[f.key] = is_current
+    return values, leave_empty
+
+
 async def resolve_core(
     session: AsyncSession,
     fields: list[FormField],
@@ -430,7 +509,15 @@ async def resolve_core(
     out = Resolution()
     user_answers = user_answers or {}
     unresolved: list[FormField] = []
+    history, leave_empty = job_history(fields, master, job)
     for f in fields:
+        if f.key in history:
+            v = _finalize(f, history[f.key])
+            if v is not None:
+                out.values.append(Resolved(f.key, v, "profile"))
+                continue
+        if f.key in leave_empty:
+            continue  # "Até" do emprego atual: fica vazio de propósito (nem você nem a IA precisam preencher)
         state = await deterministic(session, f, master, prefs, job, cover_letter, user_answers, out)
         if state == "sensitive":
             out.pending.append(f)

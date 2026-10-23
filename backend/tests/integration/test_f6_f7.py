@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import random
+import re
 import zipfile
 from datetime import UTC, datetime, timedelta
 
@@ -282,3 +283,25 @@ async def test_salary_experience_and_birth_rules(session) -> None:
     assert vals["y"].endswith("anos") and int(vals["y"].split()[0]) >= 1
     assert vals["b"] == "Brasília, DF"
     assert "d" not in vals and "d" in {f.key for f in res.pending}  # sem cadastro: fica para você (nunca para a IA)
+
+
+async def test_current_job_block_from_master(session) -> None:
+    """Bloco "atual ou último trabalho": empresa, cargo, início, "Até" vazio e "trabalho atual" marcado, sem IA."""
+    from tracker.modules.applications.resolver import resolve_core
+
+    await factories.seed_master(session)
+    job = await factories.job(session, title="Data Engineer Pleno")
+    fields = [
+        FormField(key="y", label="Em que ano foi seu primeiro emprego ou trabalho remunerado?", kind="number"),
+        FormField(key="c", label="Empresa *", kind="text", required=True),
+        FormField(key="p", label="Posição *", kind="text", required=True),
+        FormField(key="d", label="De", kind="month"),
+        FormField(key="a", label="Até", kind="month"),
+        FormField(key="x", label="Este é o meu trabalho atual", kind="checkbox"),
+        FormField(key="s", label="Atual ou último salário", kind="text"),
+    ]
+    res, _ = await resolve_core(session, fields, job, allow_ai=False)
+    vals = {r.key: r.value for r in res.values}
+    assert vals["y"].isdigit() and vals["c"] and vals["p"] and re.fullmatch(r"\d{4}-\d{2}", vals["d"])
+    assert vals["x"] is True and "a" not in vals
+    assert "s" not in vals  # salário atual: fica para você

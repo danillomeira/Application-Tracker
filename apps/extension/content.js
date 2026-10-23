@@ -61,7 +61,7 @@
     bg({ type: "badge", text, tone: pending ? "info" : "ok" }).catch(() => {});
   }
   function teardown() {
-    host?.remove(); host = null; shadow = null;
+    host?.remove(); host = null; shadow = null; lastHtml = "";
     hideBubble();
     bg({ type: "badge", text: "" }).catch(() => {});
   }
@@ -145,8 +145,27 @@
   const GENERIC_PH = /^(enter|search|select|choose|type( here)?|type your answer|enter your answer|your answer|digite( aqui)?|digite sua resposta( aqui)?|selecione|escolha|buscar|pesquisar|procurar|sua resposta|start typing|\.{3}|-+)\.?…?$/i;
   /** "first_name" → "first name" (último recurso para campos sem rótulo nenhum). */
   const humanName = (s) => (/^[a-z][\w-]*$/i.test(s) && !/^(input|field|react-select|trk)\d*/i.test(s) ? s.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim() : "");
+  /** Texto de uma opção de rádio/checkbox. Sem <label>, procura o texto ao lado; nunca devolve "on" (valor padrão do navegador). */
   function radioOptionLabel(r) {
-    return txt(r.id ? document.querySelector(`label[for="${CSS.escape(r.id)}"]`) : null) || txt(r.closest("label")) || r.getAttribute("aria-label") || r.value;
+    const byFor = r.id ? txt(document.querySelector(`label[for="${CSS.escape(r.id)}"]`)) : "";
+    if (byFor) return byFor;
+    const wrap = txt(r.closest("label")); if (wrap) return wrap;
+    const aria = r.getAttribute("aria-label"); if (aria) return aria.trim();
+    const lb = r.getAttribute("aria-labelledby");
+    if (lb) { const t = lb.split(/\s+/).map((id) => txt(document.getElementById(id))).join(" ").trim(); if (t) return t; }
+    // texto logo depois do botão (nó de texto ou elemento irmão)
+    for (let n = r.nextSibling; n; n = n.nextSibling) {
+      if (n.nodeType === 1 && n.matches?.("input,select,textarea")) break;
+      const t = (n.textContent || "").replace(/\s+/g, " ").trim();
+      if (t) return t;
+    }
+    // o menor bloco que só contém esta opção
+    for (let box = r.parentElement, d = 0; box && d < 3; box = box.parentElement, d++) {
+      if (box.querySelectorAll("input").length > 1) break;
+      const t = txt(box); if (t) return t;
+    }
+    const v = (r.value || "").trim();
+    return v && v.toLowerCase() !== "on" ? v : "";
   }
   function groupQuestion(first, group) {
     const fs = first.closest("fieldset"); const lg = fs?.querySelector("legend"); if (lg) return txt(lg);
@@ -155,6 +174,16 @@
     // o menor ancestral que contém o grupo todo; a pergunta é o texto logo antes dele
     let box = first.parentElement;
     while (box && group && !group.every((r) => box.contains(r))) box = box.parentElement;
+    // dentro do bloco do campo: o texto antes da primeira opção ("What is your level of English?")
+    if (box) {
+      let child = first;
+      while (child.parentElement && child.parentElement !== box) child = child.parentElement;
+      for (let prev = child.previousElementSibling; prev; prev = prev.previousElementSibling) {
+        if (prev.querySelector("input,select,textarea")) break;
+        const t = txt(prev);
+        if (t && t.length < 300) return t;
+      }
+    }
     for (let node = box, depth = 0; node && depth < 3; node = node.parentElement, depth++) {
       const prev = node.previousElementSibling;
       if (prev && txt(prev) && txt(prev).length < 220 && !prev.querySelector("input")) return txt(prev);
@@ -166,7 +195,7 @@
     if (el.tagName === "SELECT") return "select";
     if (el.tagName === "TEXTAREA") return "textarea";
     if (el.getAttribute("role") === "combobox" || el.getAttribute("aria-autocomplete") === "list" || el.getAttribute("aria-haspopup") === "listbox") return "typeahead";
-    if (["email", "tel", "number", "date", "file", "checkbox", "url"].includes(type)) return type === "url" ? "text" : type;
+    if (["email", "tel", "number", "date", "month", "file", "checkbox", "url"].includes(type)) return type === "url" ? "text" : type;
     return "text";
   }
   // chave de cada campo fica num WeakMap (a página não vê nem consegue forjar)
@@ -191,6 +220,8 @@
         group.forEach((r) => keys.set(r, key));
         els.set(key, group);
         const opts = group.map(radioOptionLabel);
+        // opções sem texto ou repetidas: não dá para saber qual é qual, então não marca nada (fica para você)
+        if (opts.some((o) => !o) || new Set(opts.map(norm)).size < opts.length) return;
         const checked = group.find((r) => r.checked);
         out.push({ key, label: groupQuestion(el, group), kind: "radio", options: opts, required: group.some((r) => r.required), current_value: checked ? opts[group.indexOf(checked)] : null });
         return;
@@ -304,6 +335,14 @@
       typeInto(el, value);
       await pickFromListbox(value);
       return !!el.value || !!comboValue(el);
+    }
+    if (field.kind === "month") {
+      // <input type="month"> espera "aaaa-mm"; aceita também "mm/aaaa"
+      const s = String(value);
+      const m = s.match(/^(\d{4})-(\d{2})$/) || s.match(/^(\d{2})\/(\d{4})$/);
+      if (!m) return false;
+      nativeSet(el, m[1].length === 4 ? `${m[1]}-${m[2]}` : `${m[2]}-${m[1]}`);
+      return !!el.value;
     }
     if (field.kind === "date" && /^\d{2}\/\d{2}\/\d{4}$/.test(String(value))) {
       const [d, m, y] = String(value).split("/");
@@ -422,6 +461,7 @@
 
   // ---------------- painel (shadow DOM, visual do app; botões só aceitam cliques de verdade) ----------------
   let host, shadow;
+  let lastHtml = ""; // último conteúdo desenhado: evita redesenhar (e piscar) quando nada mudou
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const I = (d, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   const ICON = {
@@ -442,10 +482,10 @@
     .root{--p:#2563eb;--p2:#0ea5e9;--bg:#fff;--fg:#0f172a;--mut:#526075;--bd:#e3e7ef;--soft:#f4f6fa;--acc:#eaf2ff;
       font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,"Segoe UI",sans-serif;font-size:13px;line-height:1.45;color:var(--fg);letter-spacing:-.01em}
     @media (prefers-color-scheme:dark){.root{--bg:#11151f;--fg:#e5e9f2;--mut:#a3adc2;--bd:#232a3b;--soft:#1a2030;--acc:#172554}}
-    .fab{display:flex;align-items:center;gap:8px;border:0;cursor:pointer;background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border-radius:999px;padding:10px 14px;box-shadow:0 8px 24px rgba(37,99,235,.35);font:600 13px/1 inherit;font-family:inherit;animation:pop .25s cubic-bezier(.2,.9,.3,1.2)}
+    .fab{display:flex;align-items:center;gap:8px;border:0;cursor:pointer;background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border-radius:999px;padding:10px 14px;box-shadow:0 8px 24px rgba(37,99,235,.35);font:600 13px/1 inherit;font-family:inherit}.fab.enter{animation:pop .25s cubic-bezier(.2,.9,.3,1.2)}
     .fab:focus-visible,.b:focus-visible,.ib:focus-visible,.it:focus-visible{outline:2px solid var(--p);outline-offset:2px}
     .fab .n{background:#fff;color:var(--p);border-radius:999px;padding:2px 7px;font-size:11px}
-    .card{width:344px;max-height:min(78vh,640px);display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--bd);border-radius:16px;box-shadow:0 2px 4px rgba(15,23,42,.06),0 18px 40px -12px rgba(15,23,42,.28);overflow:hidden;animation:in .22s cubic-bezier(.2,.8,.2,1)}
+    .card{width:344px;max-height:min(78vh,640px);display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--bd);border-radius:16px;box-shadow:0 2px 4px rgba(15,23,42,.06),0 18px 40px -12px rgba(15,23,42,.28);overflow:hidden}.card.enter{animation:in .22s cubic-bezier(.2,.8,.2,1)}
     @keyframes in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
     @keyframes pop{from{opacity:0;transform:scale(.8)}to{opacity:1;transform:none}}
     @media (prefers-reduced-motion:reduce){.card,.fab{animation:none}.prog i{transition:none}}
@@ -497,6 +537,7 @@
     .logo .ini{background:linear-gradient(135deg,var(--p),var(--p2));width:100%;height:100%;display:grid;place-items:center}`;
   function ensureHost() {
     if (host?.isConnected) return;
+    lastHtml = "";
     host = document.createElement("div");
     host.id = "tracker-assistant";
     const side = state.cfg?.panelSide === "left" ? "left" : "right";
@@ -524,8 +565,13 @@
     if (!el?.isConnected || typeof el.showPopover !== "function") return;
     if (!el.hasAttribute("popover")) {
       el.setAttribute("popover", "manual");
-      // popover vem com estilo próprio (centralizado, borda, fundo): desfaz para manter a posição do painel
-      Object.assign(el.style, { margin: "0", border: "0", padding: "0", background: "transparent", overflow: "visible", width: "auto", height: "auto", color: "inherit" });
+      // popover vem com estilo próprio (centralizado, borda, fundo branco): neutraliza só o que o elemento
+      // não definiu, para não apagar o fundo escuro e o espaçamento da sugestão 💡
+      const neutral = { margin: "0", border: "0", padding: "0", background: "transparent", overflow: "visible", color: "inherit" };
+      for (const [k, v] of Object.entries(neutral)) if (!el.style[k] && !(k === "background" && el.style.backgroundColor)) el.style[k] = v;
+      for (const k of ["top", "right", "bottom", "left"]) if (!el.style[k]) el.style[k] = "auto"; // sem isso o popover estica (inset: 0)
+      el.style.width = el.style.width || "max-content";
+      el.style.height = el.style.height || "auto";
     }
     try { if (el.matches(":popover-open")) el.hidePopover(); el.showPopover(); } catch {}
   }
@@ -561,7 +607,11 @@
     const pending = rows.filter((r) => r.empty);
     const done = rows.filter((r) => !r.empty);
     if (state.minimized) {
-      shadow.innerHTML = `<style>${CSS_TEXT}</style><div class="root"><button class="fab" id="open" title="Abrir o assistente (Alt+Shift+P)">${ICON.spark} Assistente${pending.length ? ` <span class="n">${pending.length}</span>` : ""}</button></div>`;
+      const fab = `fab|${pending.length}`;
+      if (fab === lastHtml && shadow.getElementById("open")) return; // nada mudou: não redesenha (sem piscar)
+      const enter = !lastHtml.startsWith("fab|") ? " enter" : "";
+      lastHtml = fab;
+      shadow.innerHTML = `<style>${CSS_TEXT}</style><div class="root"><button class="fab${enter}" id="open" title="Abrir o assistente (Alt+Shift+P)">${ICON.spark} Assistente${pending.length ? ` <span class="n">${pending.length}</span>` : ""}</button></div>`;
       shadow.getElementById("open").onclick = (e) => { if (e.isTrusted) { state.minimized = false; tab.set({ minimized: false }); render(); } };
       return;
     }
@@ -611,12 +661,19 @@
     if (msg) body += `<div class="msg" role="status">${esc(msg)}</div>`;
     body += `<div class="btns"><button class="b b2 grow" id="sent">${ICON.check} Já me candidatei</button>${c?.known ? `<button class="b b2" id="openapp" title="Abrir no tracker">${ICON.ext}</button>` : ""}</div>`;
     const title = c?.known ? "Assistente" : "Assistente de candidatura";
-    shadow.innerHTML = `<style>${CSS_TEXT}</style><div class="root"><div class="card" role="dialog" aria-label="Assistente de candidatura">
+    const sig = `card|${title}|${state.busy}|${body}`;
+    if (sig === lastHtml && shadow.querySelector(".card")) return; // nada mudou: mantém o DOM (sem piscar nem perder o scroll)
+    const enter = !lastHtml.startsWith("card|") ? " enter" : ""; // animação só quando o painel aparece
+    const scroll = shadow.querySelector(".bd")?.scrollTop || 0;
+    lastHtml = sig;
+    shadow.innerHTML = `<style>${CSS_TEXT}</style><div class="root"><div class="card${enter}" role="dialog" aria-label="Assistente de candidatura">
       <div class="hd" title="Arraste para mover"><span class="brand">${ICON.spark}</span><span class="ttl">${title}<i class="dot ${state.busy ? "busy" : ""}"></i></span>
         <button class="ib" id="pause" title="Desligar neste site">${ICON.pause}</button><button class="ib" id="opts" title="Opções">${ICON.gear}</button>
         <button class="ib" id="min" title="Minimizar">${ICON.min}</button><button class="ib" id="close" title="Fechar nesta página">${ICON.x}</button></div>
       <div class="bd">${body}</div>
       <div class="ft"><span><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> painel · <kbd>F</kbd> preencher · <kbd>I</kbd> IA</span></div></div></div>`;
+    const bdEl = shadow.querySelector(".bd");
+    if (bdEl && scroll) bdEl.scrollTop = scroll;
     const $ = (id) => shadow.getElementById(id);
     // só cliques reais do usuário: scripts da página não acionam o assistente
     const on = (id, fn) => { const el = $(id); if (el) el.onclick = (e) => { if (e.isTrusted) fn(e); }; };
@@ -694,6 +751,12 @@
       loadLogo();
       const tt = tab.get();
       if (tt.tailorTask && tt.tailorJob === info.job_id && !state.tailor) { state.tailor = { taskId: tt.tailorTask, msg: "Gerando com IA…" }; pollTailor(); }
+      else if (info.tailor_task && !state.tailor) {
+        // vaga boa com formulário aberto: o tracker já começou o CV sob medida enquanto você preenche
+        state.tailor = { taskId: info.tailor_task, msg: "Preparando um CV para esta vaga enquanto você preenche…" };
+        tab.set({ tailorTask: info.tailor_task, tailorJob: info.job_id });
+        pollTailor();
+      }
       if (info.needs_details) analyze(true); // vaga importada sem descrição: completa com o texto desta página
     } else {
       state.pageInfo = info;
@@ -725,7 +788,7 @@
     const spin = '<i class="spin" style="color:var(--p)"></i>';
     let html = `<div class="sec"><h4>📄 Currículo para esta vaga</h4>`;
     if (run) {
-      html += `<div class="muted" style="display:flex;gap:8px;align-items:center">${spin} ${esc(run.msg || "Gerando com IA… (1 a 3 minutos)")}</div>`;
+      html += `<div class="muted" style="display:flex;gap:8px;align-items:center">${spin} ${esc(run.msg || "Gerando com IA…")}</div>`;
     } else if (!t) {
       html += `<div class="muted">Um CV adaptado a esta vaga, só com fatos do seu currículo (o validador confere tudo).</div>
         <div class="btns" style="margin-top:8px"><button class="b b1 grow" id="tailor">${ICON.spark} Gerar currículo para esta vaga</button></div>`;
@@ -749,7 +812,7 @@
     render();
     try {
       const { task_id } = await api("POST", "/tailor", { job_id: id });
-      state.tailor = { taskId: task_id, msg: "Gerando com IA… (1 a 3 minutos)" };
+      state.tailor = { taskId: task_id, msg: "Gerando com IA… (cerca de 30 a 60 segundos)" };
       tab.set({ tailorTask: task_id, tailorJob: id });
       pollTailor();
     } catch (e) { state.tailor = null; say(`Não consegui gerar: ${e.message}`); }
@@ -852,12 +915,15 @@
   /** O painel nunca cobre o campo em que você está: troca de lado quando houver sobreposição. */
   let lastDodge = 0;
   function dodge(el) {
-    if (!host || Date.now() - lastDodge < 800) return;
+    if (!host || Date.now() - lastDodge < 2500) return;
     const a = host.getBoundingClientRect(), b = el.getBoundingClientRect();
-    const overlap = !(b.right < a.left || b.left > a.right || b.bottom < a.top || b.top > a.bottom);
-    if (!overlap) return;
-    lastDodge = Date.now();
+    const hits = (l, r, tp, bt) => !(b.right < l || b.left > r || b.bottom < tp || b.top > bt);
+    if (!hits(a.left, a.right, a.top, a.bottom)) return;
     const onRight = a.left > innerWidth / 2;
+    // só troca de lado se do outro lado o campo fica livre (senão ficaria indo e voltando)
+    const l2 = onRight ? 16 : innerWidth - 16 - a.width, t2 = innerHeight - 16 - a.height;
+    if (hits(l2, l2 + a.width, t2, t2 + a.height)) return;
+    lastDodge = Date.now();
     host.style.transition = "opacity .15s";
     host.style.opacity = "0";
     setTimeout(() => {

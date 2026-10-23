@@ -82,6 +82,8 @@ async def page(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
         card = await service.job_card(session, job)
         card["success_page"] = service.is_success_page(body.url, body.text)
         card["needs_details"] = service.is_thin(job) and service.looks_like_job(body.url, body.title, body.text)
+        if body.has_form:
+            card["tailor_task"] = await _auto_tailor(session, job, card)
         return card
     if service.is_flow_page(body.url):
         # login/etapas da candidatura: continua na vaga de origem, sem criar vaga nova nem gastar IA
@@ -102,6 +104,37 @@ async def page(body: PageIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
         ),
         "success_page": service.is_success_page(body.url, body.text),
     }
+
+
+async def _auto_tailor(session: SessionDep, job: Job, card: dict[str, Any]) -> str | None:
+    """Formulário aberto de uma vaga boa (top/aposta) sem CV sob medida: já começa a gerar (ou devolve a geração em curso)."""
+    running = await session.scalar(
+        select(TaskRun)
+        .where(TaskRun.kind == "ai.resume_tailor", TaskRun.entity_id == job.id, TaskRun.status.in_(("pending", "running")))
+        .order_by(TaskRun.created_at.desc())
+        .limit(1)
+    )
+    if running is not None:
+        return str(running.id)
+    from datetime import UTC, datetime, timedelta
+
+    failed_recently = await session.scalar(
+        select(TaskRun.id)
+        .where(TaskRun.kind == "ai.resume_tailor", TaskRun.entity_id == job.id, TaskRun.status == "failed")
+        .where(TaskRun.updated_at > datetime.now(UTC) - timedelta(hours=6))
+        .limit(1)
+    )
+    if failed_recently is not None:
+        return None  # não fica tentando a cada recarga; o botão "Gerar" continua disponível
+    cfg = await settings_store.get(session, "resume")
+    quadrant = (card.get("score") or {}).get("quadrant")
+    if card.get("tailored") or not cfg.get("auto_tailor_on_apply", True) or quadrant not in ("top", "bet"):
+        return None
+    sel = await resume_service.select_for_job(session, job)
+    if not sel["needs_tailored"]:
+        return None  # o coringa já combina bem: não gasta IA
+    tr = await enqueue(session, "ai.resume_tailor", entity_type="job", entity_id=job.id, job_id=str(job.id), base_variant_id=None)
+    return str(tr.id)
 
 
 async def _extract_page(session: SessionDep, body: PageIn) -> JobNormalized:

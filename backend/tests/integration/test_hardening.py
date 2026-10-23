@@ -116,3 +116,24 @@ async def test_assistant_tailor_flow(anon_client: AsyncClient, session, dispatch
     assert page.json()["tailored"]["status"] == "draft"
     ok = await anon_client.post(f"/api/v1/assistant/tailored/{v.id}/approve", headers=h)
     assert ok.status_code == 200 and ok.json()["tailored"]["status"] == "approved"
+
+
+async def test_auto_tailor_when_form_opens(anon_client: AsyncClient, session, dispatched) -> None:
+    """Formulário aberto numa vaga top sem CV sob medida: a geração começa sozinha, uma vez só."""
+    from tracker.modules.scoring.models import JobScore
+
+    await factories.seed_master(session)
+    await settings_store.put(session, "extension", {"token_sha256": hashlib.sha256(b"tok").hexdigest()})
+    job = await factories.job(session, canonical_url="https://jobs.example.com/top-1")
+    session.add(JobScore(job_id=job.id, chance=80, attractiveness=80, priority=80, quadrant="top", is_current=True,
+                         explanation={}, chance_breakdown={}, attractiveness_breakdown={}, weights_version=1, master_version=1))  # fmt: skip
+    await session.commit()
+    h = {"authorization": "Extension tok"}
+    body = {"url": job.canonical_url, "title": "", "text": "", "has_form": True}
+    first = (await anon_client.post("/api/v1/assistant/page", json=body, headers=h)).json()
+    assert first["tailor_task"] and [n for n, _ in dispatched].count("ai.resume_tailor") == 1
+    again = (await anon_client.post("/api/v1/assistant/page", json=body, headers=h)).json()
+    assert again["tailor_task"] == first["tailor_task"]  # a mesma geração, sem duplicar
+    assert [n for n, _ in dispatched].count("ai.resume_tailor") == 1
+    browse = (await anon_client.post("/api/v1/assistant/page", json={**body, "has_form": False}, headers=h)).json()
+    assert "tailor_task" not in browse  # só olhando a vaga: não gasta IA

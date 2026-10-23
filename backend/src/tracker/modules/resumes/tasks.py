@@ -35,6 +35,7 @@ async def generate_draft(
     task: str,
     entity_type: str | None = None,
     entity_id: uuid.UUID | None = None,
+    effort: str = "high",
 ) -> tuple[ResumeContent, ResumeDraft]:
     """Gera rascunho, monta e valida; uma nova tentativa recebe as violações (docs/08 §5)."""
     prompt = load_prompt(task)
@@ -46,7 +47,7 @@ async def generate_draft(
                 system=prompt,
                 context=master_context(master),
                 user=user,
-                effort="high",
+                effort=effort,  # type: ignore[arg-type]
                 entity_type=entity_type,
                 entity_id=entity_id,
                 prompt_version="v1",
@@ -129,6 +130,9 @@ async def _tailor(sm: SM, task_run_id: str | None, job_id: str, base_variant_id:
             sel = await service.select_for_job(s, job)
             base = await s.get(ResumeVariant, sel["best_variant_id"]) if sel["best_variant_id"] else None
         cfg = await settings_store.get(s, "resume")
+        tailor_effort = str(cfg.get("tailor_effort") or "medium")
+        if tailor_effort not in ("low", "medium", "high"):
+            tailor_effort = "medium"
         job_block = job_prompt_block(job, company.name if company else "")
         lang = job.language if job.language in ("en", "pt") else "en"
         base_content = base.content if base else None
@@ -140,7 +144,9 @@ async def _tailor(sm: SM, task_run_id: str | None, job_id: str, base_variant_id:
             "\n\nComece do coringa abaixo e adapte para a vaga:\n<base>\n"
             f"{ResumeContent.model_validate(base_content).model_dump_json()}\n</base>"
         )
-    content, draft = await generate_draft(get_ai(sm), master, lang, instructions, "resume.tailor", "job", uuid.UUID(job_id))
+    content, draft = await generate_draft(
+        get_ai(sm), master, lang, instructions, "resume.tailor", "job", uuid.UUID(job_id), effort=tailor_effort
+    )
     async with sm() as s:
         job = await s.get(Job, uuid.UUID(job_id))
         assert job is not None

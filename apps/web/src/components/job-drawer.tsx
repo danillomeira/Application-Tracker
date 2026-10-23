@@ -197,7 +197,7 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
             <p className="text-sm font-semibold">Currículo para esta vaga</p>
             <p className="text-xs text-muted-foreground">
               {tailorTask.running
-                ? `${tailorTask.progress?.message ?? "Gerando"}… (1 a 3 minutos)`
+                ? `${tailorTask.progress?.message ?? "Gerando"}… (cerca de 30 a 60 segundos)`
                 : "A IA adapta o seu CV a esta vaga, só com fatos do seu currículo. Você revisa e aprova em Currículos; a extensão anexa o aprovado."}
             </p>
           </div>

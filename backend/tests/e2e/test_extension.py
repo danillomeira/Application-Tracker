@@ -307,6 +307,8 @@ async def test_fields_labelled_by_nearby_text_not_placeholder(servers, session, 
             assert await page.evaluate("document.getElementById('a4').files.length") == 1
             await page.wait_for_function("window.picked === '5-7 years' || window.picked === '8+ years'", timeout=15000)
             assert await page.input_value("#a7") == ""  # quem indicou: não inventa
+            await page.wait_for_function("document.getElementById('e4').checked", timeout=10000)  # inglês: Advanced
+            assert not await page.is_checked("#e0")
             panel = page.locator("#tracker-assistant")
             assert await panel.get_by_text("Enter", exact=True).count() == 0  # nenhum campo chamado "Enter"
         finally:

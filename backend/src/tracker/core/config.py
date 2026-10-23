@@ -54,9 +54,11 @@ class Settings(BaseSettings):
     ai_monthly_budget_usd: float = 30.0
     ai_model_default: str = "claude-opus-5-5"
     ai_fake: bool = False
-    # "api" (ANTHROPIC_API_KEY), "claude_code" (CLI `claude -p` com a sua assinatura) ou "auto":
-    # usa a API se houver chave, senão o Claude Code instalado.
-    ai_backend: str = "auto"
+    # "api" (Anthropic), "claude_code", "ollama" (local) ou "auto".
+    ai_backend: Literal["auto", "api", "claude_code", "ollama"] = "auto"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_timeout_s: int = 900
+    agent_device_token: str | None = None
     # Tarefas em paralelo no worker (threads; o modelo de embeddings fica carregado uma vez só)
     worker_concurrency: int = 3
     claude_code_cmd: str = "claude"
@@ -83,6 +85,8 @@ class Settings(BaseSettings):
 
     sentry_dsn: str | None = None
     cors_origins: list[str] = ["http://localhost:3100"]
+    # Hosts aceitos no cabeçalho Host (contra DNS rebinding). Os de APP_BASE_URL/API_BASE_URL entram sozinhos.
+    allowed_hosts: list[str] = []
 
     @model_validator(mode="after")
     def _check(self) -> Settings:
@@ -108,6 +112,16 @@ class Settings(BaseSettings):
     @property
     def sync_database_url(self) -> str:
         return self.database_url.replace("+asyncpg", "+psycopg")
+
+    @property
+    def trusted_hosts(self) -> list[str]:
+        from urllib.parse import urlparse
+
+        hosts = {"localhost", "127.0.0.1", "::1", "[::1]", "api", *self.allowed_hosts}
+        hosts |= {h for u in (self.app_base_url, self.api_base_url) if (h := urlparse(u).hostname)}
+        if self.app_env == "test":
+            hosts.add("test")
+        return sorted(hosts)
 
     @property
     def is_dev(self) -> bool:

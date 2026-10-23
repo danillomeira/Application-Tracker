@@ -43,6 +43,18 @@ class ParsedEmail:
     received_at: datetime
     labels: list[str] = field(default_factory=list)
     message_id_header: str | None = None
+    # remetente autenticado pelo Gmail (DMARC, ou DKIM do próprio domínio do remetente): só assim o app age sozinho
+    authenticated: bool = False
+
+
+def sender_authenticated(auth_results: str, from_addr: str) -> bool:
+    ar = auth_results.lower()
+    domain = from_addr.rsplit("@", 1)[-1].lower()
+    if not domain or not ar:
+        return False
+    if "dmarc=pass" in ar:
+        return True
+    return bool(re.search(r"dkim=pass[^;]*header\.(?:d|i)=@?(?:[\w-]+\.)*" + re.escape(domain) + r"(?![\w.-])", ar))
 
 
 class Gmail:
@@ -159,4 +171,5 @@ def parse_message(m: dict[str, Any]) -> ParsedEmail:
         received_at=received if received.tzinfo else received.replace(tzinfo=UTC),
         labels=m.get("labelIds", []),
         message_id_header=headers.get("message-id"),
+        authenticated=sender_authenticated(headers.get("authentication-results", ""), addr.lower()),
     )

@@ -241,6 +241,9 @@ async def score_job(session: AsyncSession, job: Job) -> JobScore:
     people = (await session.scalars(select(Person).where(Person.company_id == company.id))).all()
     referral = any(p.kind == "referrer" and p.referral_status in ("asked", "accepted") for p in people)
     first_deg = sum(1 for p in people if p.kind in ("connection", "referrer"))
+    extra = job.extra or {}
+    generic_value = extra.get("is_generic")
+    is_generic = generic_value if isinstance(generic_value, bool) and not extra.get("needs_extraction") else None
 
     chance_f = {
         "fit_tecnico": F.fit_tecnico(must_cov, nice_cov, missing_must),
@@ -252,8 +255,9 @@ async def score_job(session: AsyncSession, job: Job) -> JobScore:
         "nao_fantasma": F.nao_fantasma(
             job.repost_count,
             age_days,
-            bool((job.extra or {}).get("is_generic")),
+            is_generic,
             profile.layoffs_12m if profile else None,
+            age_basis="data de publicação" if job.posted_at else "primeira coleta",
         ),
         "conexoes": F.conexoes(referral, first_deg, 0),
     }
@@ -346,10 +350,10 @@ def suggested_action(quad: str, needs_tailored: bool, has_recruiter: bool) -> st
             parts.insert(1, "mensagem ao recrutador")
         return " + ".join(parts)
     if quad == "bet":
-        return "CV específico + contato/indicação antes de aplicar (sem modo automático)"
+        return "CV específico + contato/indicação antes de aplicar"
     if quad == "volume":
-        return "coringa; elegível ao modo automático"
-    return "não aplicar (só se sobrar cota)"
+        return "coringa; candidatura rápida com o assistente"
+    return "não aplicar (só se sobrar tempo)"
 
 
 async def _feedback_similarity(session: AsyncSession, job: Job) -> float | None:

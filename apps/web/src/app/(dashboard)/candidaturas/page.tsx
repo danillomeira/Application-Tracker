@@ -1,9 +1,10 @@
 "use client";
 
-import { KanbanSquare } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { KanbanSquare, MoreHorizontal } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CompanyLogo } from "@/components/brand";
 import { Badge, Button, Chip, Field, Input, Modal, PageHeader, Select, Skeleton, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -34,12 +35,40 @@ const COLUMNS: { key: string; title: string; statuses: string[]; drop: string; d
   { key: "encerradas", title: "Encerradas", statuses: ["rejected", "ghosted", "declined", "withdrawn"], drop: "rejected", dot: "bg-danger" },
 ];
 
+const CLOSE_REASONS = [
+  { value: "rejected", label: "Fui recusado" },
+  { value: "ghosted", label: "Sem resposta (ghosting)" },
+  { value: "declined", label: "Eu recusei a proposta" },
+  { value: "withdrawn", label: "Desisti do processo" },
+];
+
 export default function ApplicationsPage() {
+  const [text, setText] = useState("");
   const [q, setQ] = useState("");
-  const { data, isLoading } = useGet<App[]>(["applications", q], `/api/v1/applications${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-  const move = useSend<{ id: string; status: string }>("PATCH", (v) => `/api/v1/applications/${v.id}`, {
-    invalidate: [["applications"], ["dashboard"]],
+  useEffect(() => {
+    const t = setTimeout(() => setQ(text.trim()), 300); // espera parar de digitar
+    return () => clearTimeout(t);
+  }, [text]);
+  const qc = useQueryClient();
+  const key = ["applications", q];
+  const { data, isLoading } = useGet<App[]>(key, `/api/v1/applications${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  const patch = useSend<{ id: string; status: string }>("PATCH", (v) => `/api/v1/applications/${v.id}`, {
+    invalidate: [["applications"], ["dashboard"], ["jobs"]],
   });
+  /** Move o cartão na hora (otimista); se a API recusar, volta. */
+  const move = (id: string, status: string) => {
+    const prev = qc.getQueryData<App[]>(key);
+    qc.setQueryData<App[]>(key, (old) => old?.map((a) => (a.id === id ? { ...a, status } : a)));
+    patch.mutate({ id, status }, { onError: () => qc.setQueryData<App[]>(key, prev) });
+  };
+  const [closing, setClosing] = useState<string | null>(null);
+  const [moving, setMoving] = useState<App | null>(null);
+  const drop = (id: string, col: (typeof COLUMNS)[number]) => {
+    const app = data?.find((a) => a.id === id);
+    if (!app || col.statuses.includes(app.status)) return; // soltou na mesma coluna: nada muda
+    if (col.key === "encerradas") setClosing(id); // pergunta o motivo
+    else move(id, col.drop);
+  };
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [showFound, setShowFound] = useState(false);
@@ -49,10 +78,10 @@ export default function ApplicationsPage() {
       <PageHeader
         icon={<KanbanSquare size={20} />}
         title="Candidaturas"
-        description="Arraste os cartões para mudar o status (transições inválidas são recusadas)"
+        description="Arraste os cartões (ou use ⋯ no cartão) para mudar o status"
         actions={
           <>
-            <Input placeholder="Buscar" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />
+            <Input placeholder="Buscar" value={text} onChange={(e) => setText(e.target.value)} className="w-48" aria-label="Buscar candidaturas" />
             <span data-tour="manual"><ManualButton /></span>
           </>
         }
@@ -65,7 +94,7 @@ export default function ApplicationsPage() {
           <span>Vagas que a busca encontrou mas você ainda não decidiu ficam em Vagas.</span>
         </div>
       )}
-      {isLoading ? (
+      {isLoading && !data ? (
         <Skeleton className="h-96" />
       ) : (
         <div className="flex gap-2.5 overflow-x-auto pb-2" data-tour="kanban">
@@ -84,7 +113,7 @@ export default function ApplicationsPage() {
                 }}
                 onDragLeave={() => setOver(null)}
                 onDrop={() => {
-                  if (dragging) move.mutate({ id: dragging, status: col.drop });
+                  if (dragging) drop(dragging, col);
                   setDragging(null);
                   setOver(null);
                 }}
@@ -128,7 +157,22 @@ export default function ApplicationsPage() {
                             {a.quadrant && <Badge tone={QUADRANT_TONE[a.quadrant]}>{QUADRANT_LABEL[a.quadrant]}</Badge>}
                           </div>
                           {a.next_action && <p className="mt-1.5 text-xs text-warning">→ {a.next_action}</p>}
-                          <p className="mt-1 text-[11px] text-muted-foreground">{relativeTime(a.last_activity_at)}</p>
+                          <div className="mt-1 flex items-center justify-between">
+                            <p className="text-[11px] text-muted-foreground">{relativeTime(a.last_activity_at)}</p>
+                            <button
+                              type="button"
+                              aria-label={`Mover ${a.job_title}`}
+                              title="Mover para…"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setMoving(a);
+                              }}
+                              className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              <MoreHorizontal size={14} />
+                            </button>
+                          </div>
                         </Link>
                       </motion.div>
                     ))}
@@ -139,6 +183,40 @@ export default function ApplicationsPage() {
           })}
         </div>
       )}
+      <Modal open={!!closing} onClose={() => setClosing(null)} title="Por que encerrou?">
+        <div className="grid gap-2">
+          {CLOSE_REASONS.map((r) => (
+            <Button
+              key={r.value}
+              variant="outline"
+              className="justify-start"
+              onClick={() => {
+                if (closing) move(closing, r.value);
+                setClosing(null);
+              }}
+            >
+              {r.label}
+            </Button>
+          ))}
+        </div>
+      </Modal>
+      <Modal open={!!moving} onClose={() => setMoving(null)} title={moving ? `Mover “${moving.job_title}”` : "Mover"}>
+        <div className="grid gap-2">
+          {COLUMNS.filter((c) => moving && !c.statuses.includes(moving.status)).map((c) => (
+            <Button
+              key={c.key}
+              variant="outline"
+              className="justify-start"
+              onClick={() => {
+                if (moving) drop(moving.id, c);
+                setMoving(null);
+              }}
+            >
+              <span className={cn("h-2 w-2 rounded-full", c.dot)} /> {c.title}
+            </Button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -146,10 +224,10 @@ export default function ApplicationsPage() {
 function ManualButton() {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ company_name: "", title: "", url: "", channel: "external", description: "", notes: "" });
-  const send = useSend("POST", "/api/v1/applications/manual", { success: "Candidatura registrada", invalidate: [["applications"]] });
+  const send = useSend("POST", "/api/v1/applications/manual", { success: "Candidatura registrada", invalidate: [["applications"], ["jobs"], ["dashboard"]] });
   return (
     <>
-      <Button onClick={() => setOpen(true)}>Registrar “enviei”</Button>
+      <Button onClick={() => setOpen(true)}>Registrar candidatura</Button>
       <Modal open={open} onClose={() => setOpen(false)} title="Registrar candidatura feita fora do sistema">
         <div className="space-y-3">
           <Field label="Empresa"><Input value={f.company_name} onChange={(e) => setF({ ...f, company_name: e.target.value })} /></Field>

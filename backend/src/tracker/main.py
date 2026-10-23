@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from tracker.api.router import api_router
@@ -50,10 +51,11 @@ def create_app() -> FastAPI:
         docs_url="/api/docs" if s.app_env != "prod" else None,
         openapi_url="/api/openapi.json",
     )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=s.trusted_hosts)
+    # a extensão fala com a API pelo service worker (permissão de host), sem precisar de CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=s.cors_origins,
-        allow_origin_regex=r"^(chrome|moz)-extension://.*$",  # extensão do assistente
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -145,6 +145,17 @@ SENSITIVE_PATTERNS = [
     r"birth",
     r"nasciment",
     r"religi",
+    # dados que só você tem (nunca pela IA): matrícula, códigos e documentos
+    r"matricula",
+    r"employee (id|number)",
+    r"numero de (funcionario|colaborador|registro)",
+    r"registro funcional",
+    r"codigo de (indicacao|referencia|funcionario|colaborador)",
+    r"referral code",
+    r"\bcnh\b",
+    r"\bpis\b",
+    r"titulo de eleitor",
+    r"conta bancaria",
 ]
 
 

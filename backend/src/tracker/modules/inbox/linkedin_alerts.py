@@ -13,9 +13,10 @@ from tracker.integrations.google.gmail import ParsedEmail
 JOB_LINK = re.compile(r"https?://(?:[\w.]*\.)?linkedin\.com/(?:comm/)?jobs/view/(\d+)")
 ALERT_SENDERS = ("jobalerts-noreply@linkedin.com", "jobs-noreply@linkedin.com", "jobs-listings@linkedin.com")
 NOISE = re.compile(
-    r"^(view job|ver vaga|apply|candidatar|easy apply|candidatura simplificada|actively recruiting|recrutando ativamente|"
-    r"new|novo|nova|promoted|promovida|\d+ (connections?|conex|applicants?|candidat)|be an early applicant|seja um dos primeiros|"
-    r"[-=_*·•]+|see all jobs|ver todas)",
+    # linha inteira (senão "Novo Nordisk" ou "Apply Digital" seriam descartadas como ruído)
+    r"^(?:(?:view job|ver vaga|apply|candidatar|easy apply|candidatura simplificada|actively recruiting|recrutando ativamente|"
+    r"new|novo|nova|promoted|promovida|be an early applicant|seja um dos primeiros|see all jobs|ver todas)[\s:.!]*|[-=_*·•\s]+)$"
+    r"|^\d+ (?:connections?|conex|applicants?|candidat)",
     re.I,
 )
 

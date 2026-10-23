@@ -5,6 +5,7 @@
  */
 import {
   ArrowRight,
+  AlertTriangle,
   BarChart3,
   Check,
   ChevronDown,
@@ -12,6 +13,7 @@ import {
   FileText,
   Laptop,
   MapPin,
+  ShieldCheck,
   ThumbsDown,
   ThumbsUp,
   Wallet,
@@ -19,17 +21,25 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { CompanyLogo, TechIcons } from "@/components/brand";
 import { formatSalary, type JobRow } from "@/components/job-card";
-import { Badge, Button, ScoreRing } from "@/components/ui";
-import { useGet, useSend } from "@/lib/hooks";
+import { Badge, Button, buttonVariants, ScoreRing, useDialog } from "@/components/ui";
+import { useGet, useSend, useTask } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE, SENIORITY_LABEL, STATUS_LABEL, WORK_MODEL_LABEL } from "@/lib/labels";
+import { isApplied } from "@/lib/job-actions";
 import { cn, formatDate, relativeTime } from "@/lib/utils";
 
-type Detail = JobRow & { description_text: string; benefits: string[] };
+type QualityCheck = {
+  key: string;
+  label: string;
+  status: "ok" | "warning" | "risk" | "unknown";
+  detail: string;
+  scoreable: boolean;
+};
+type Quality = { score: number; summary: string; score_explanation: string; checks: QualityCheck[] };
+type Detail = JobRow & { description_text: string; benefits: string[]; quality?: Quality };
 
-const APPLIED = new Set(["submitted", "under_review", "interviewing", "assessment", "offer", "accepted", "rejected", "ghosted", "declined", "withdrawn"]);
 
 function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -44,12 +54,64 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
   );
 }
 
+function QualityCheckup({ quality }: { quality: Quality }) {
+  const attentionCount = quality.checks.filter((check) => check.status === "warning" || check.status === "risk").length;
+  return (
+    <Section title="Qualidade e integridade da informação">
+      <div className="rounded-xl border bg-muted/30 p-3">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-bold",
+            quality.score >= 80 ? "bg-success/10 text-success" : quality.score >= 55 ? "bg-warning/10 text-warning" : "bg-danger/10 text-danger",
+          )}>
+            {quality.score}/100
+          </div>
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              {attentionCount > 0 ? <AlertTriangle size={15} className="text-warning" /> : <ShieldCheck size={15} className="text-success" />}
+              {quality.summary}
+            </p>
+            <p className="text-xs text-muted-foreground">{quality.score_explanation}</p>
+          </div>
+        </div>
+        <div className="mt-3 rounded-lg border border-warning/25 bg-warning/5 p-3 text-xs">
+          <p className="font-semibold">Como interpretar o sinal de vaga fantasma</p>
+          <p className="mt-1 text-muted-foreground">
+            “Vaga fantasma” é um anúncio que permanece publicado sem uma contratação real/ativa. O indicador abaixo não confirma
+            isso: ele só procura indícios indiretos. Considera 2 ou mais repostagens, anúncio com mais de 60 dias, descrição
+            marcada como genérica pela análise automática e informação de demissões recentes da empresa.
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            “Nenhum fator conhecido reduziu a pontuação” quer dizer apenas que os dados disponíveis não cruzaram esses critérios.
+            Não é uma probabilidade nem comprova que a empresa esteja contratando; dados ausentes são mostrados como desconhecidos.
+          </p>
+        </div>
+        <ul className="mt-3 space-y-2">
+          {quality.checks.map((check) => (
+            <li key={check.key} className="flex items-start gap-2 text-xs">
+              {check.status === "ok" ? (
+                <Check size={14} className="mt-0.5 shrink-0 text-success" />
+              ) : (
+                <AlertTriangle size={14} className={cn(
+                  "mt-0.5 shrink-0",
+                  check.status === "risk" ? "text-danger" : check.status === "warning" ? "text-warning" : "text-muted-foreground",
+                )} />
+              )}
+              <span><b>{check.label}:</b> {check.detail}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">
+          Confira a vaga no site oficial antes de compartilhar dados pessoais, documentos ou informações bancárias.
+        </p>
+      </div>
+    </Section>
+  );
+}
+
 export function JobDrawer({ job, onClose }: { job: JobRow | null; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    if (job) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [job, onClose]);
+  const box = useRef<HTMLElement>(null);
+  useDialog(box, !!job, onClose);
   return (
     <AnimatePresence>
       {job && (
@@ -62,6 +124,9 @@ export function JobDrawer({ job, onClose }: { job: JobRow | null; onClose: () =>
             onClick={onClose}
           />
           <motion.aside
+            ref={box}
+            tabIndex={-1}
+            aria-modal="true"
             role="dialog"
             aria-label={`Vaga ${job.title}`}
             className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l bg-card shadow-2xl"
@@ -87,13 +152,23 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
     ...inv,
   });
   const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, { success: "Vaga descartada", ...inv });
-  const tailor = useSend("POST", `/api/v1/jobs/${job.id}/approve`, { success: "Preparando currículo sob medida: aparece em Currículos", ...inv });
+  const tailor = useSend<{ job_id: string }, { task_id: string }>("POST", "/api/v1/resumes/variants/tailored");
+  const tailorTask = useTask();
   const fb = useSend<{ verdict: string }>("POST", `/api/v1/jobs/${job.id}/feedback`, { success: "Obrigado: isso ajusta as próximas notas" });
   const [opened, setOpened] = useState(false);
-  const link = j.apply_url || j.canonical_url;
+  const rawLink = j.apply_url || j.canonical_url;
+  const link = (() => {
+    if (!rawLink) return null;
+    try {
+      const parsed = new URL(rawLink);
+      return !parsed.username && !parsed.password && (parsed.protocol === "https:" || parsed.protocol === "http:") ? rawLink : null;
+    } catch {
+      return null;
+    }
+  })();
   const s = j.score;
   const status = j.application_status;
-  const isApplied = !!status && APPLIED.has(status);
+  const done = isApplied(status);
   const salary = formatSalary(j.salary);
   const pos = [...(s?.explanation.chance?.positives ?? []), ...(s?.explanation.attractiveness?.positives ?? [])];
   const neg = [...(s?.explanation.knockout ?? []), ...(s?.explanation.chance?.negatives ?? []), ...(s?.explanation.attractiveness?.negatives ?? [])];
@@ -120,8 +195,8 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
 
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {/* Próximo passo: o bloco mais importante da tela */}
-        <div className={cn("rounded-2xl border p-4", isApplied ? "border-success/30 bg-success/5" : "border-primary/25 bg-accent/60")}>
-          {isApplied ? (
+        <div className={cn("rounded-2xl border p-4", done ? "border-success/30 bg-success/5" : "border-primary/25 bg-accent/60")}>
+          {done ? (
             <>
               <p className="flex items-center gap-2 font-semibold text-success"><Check size={17} /> Você já se candidatou</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -145,13 +220,13 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
                   <div className="flex-1">
                     <p className="text-sm">Abra a vaga no site da empresa e candidate-se por lá.</p>
                     {link ? (
-                      <a href={link} target="_blank" rel="noreferrer" onClick={() => setOpened(true)}>
-                        <Button size="lg" className="mt-2 w-full">
-                          <ExternalLink size={16} /> Abrir a vaga no site
-                        </Button>
+                      <a href={link} target="_blank" rel="noreferrer" onClick={() => setOpened(true)} className={buttonVariants({ size: "lg", className: "mt-2 w-full" })}>
+                        <ExternalLink size={16} /> Abrir a vaga no site
                       </a>
                     ) : (
-                      <p className="mt-1 text-xs text-warning">Esta vaga não tem link. Procure pelo título no site da empresa.</p>
+                      <p className="mt-1 text-xs text-warning">
+                        {rawLink ? "Link bloqueado por segurança: use apenas um endereço HTTP ou HTTPS válido." : "Esta vaga não tem link. Procure pelo título no site da empresa."}
+                      </p>
                     )}
                     <p className="mt-1.5 text-xs text-muted-foreground">Com a extensão instalada, ela preenche o formulário para você. Quem clica em enviar é você.</p>
                   </div>
@@ -186,12 +261,34 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
                 >
                   <X size={14} /> Não tenho interesse
                 </Button>
-                <Button variant="ghost" size="sm" disabled={tailor.isPending} onClick={() => tailor.mutate(undefined)} title="A IA monta um currículo ajustado para esta vaga">
-                  <FileText size={14} /> Gerar currículo sob medida
-                </Button>
               </div>
             </>
           )}
+        </div>
+
+        {/* Currículo para a vaga: sempre disponível (antes ou depois de se candidatar) */}
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border p-4">
+          <FileText size={18} className="text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Currículo para esta vaga</p>
+            <p className="text-xs text-muted-foreground">
+              {tailorTask.running
+                ? `${tailorTask.progress?.message ?? "Gerando"}… (cerca de 30 a 60 segundos)`
+                : "A IA adapta o seu CV a esta vaga, só com fatos do seu currículo. Você revisa e aprova em Currículos; a extensão anexa o aprovado."}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            disabled={tailorTask.running || tailor.isPending}
+            onClick={async () => {
+              try {
+                tailorTask.start((await tailor.mutateAsync({ job_id: job.id })).task_id);
+              } catch {}
+            }}
+          >
+            {tailorTask.running ? "Gerando…" : "Gerar currículo"}
+          </Button>
+          <Link href="/curriculos" className="text-xs font-medium text-primary hover:underline">Ver em Currículos</Link>
         </div>
 
         {s && (

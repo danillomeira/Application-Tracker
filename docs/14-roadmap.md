@@ -59,7 +59,7 @@ Estimativas para dedicação parcial com assistência de IA.
 - [x] Pós-entrevista, agradecimento, banco de perguntas, testes técnicos (RF-ENT-04..07)
 **Demo:** entrevista marcada → dossiê com fontes pronto + simulação funcionando.
 
-## F5 · Easy Apply assistido (2–3 semanas)
+## F5 · Easy Apply assistido (2–3 semanas) · *robô removido na F10 (ADR-020)*
 - [x] Agente local: navegador persistente, ritmo humano, segurança, kill switch, protocolo WS (RF-CAN-02, 09..11)
 - [x] Busca de vagas no LinkedIn (RF-VAG-02, 10)
 - [x] Motor do modal + resolução de perguntas + pendências + Telegram (RF-CAN-03..06, RF-NOT-03)
@@ -98,3 +98,7 @@ Estimativas para dedicação parcial com assistência de IA.
 - [x] Filtros de vagas por tecnologia, empresa, salário, modelo, senioridade, regime, local, data e notas
 - [x] Interface refeita: tema claro/escuro, animações (Motion), kanban animado, cartões de vaga com notas em anel
 
+## F10 · Sem robô, extensão no centro (concluída)
+- [x] Robô local removido (código, fila, tabelas, configurações, telas) (ADR-020)
+- [x] Vagas do LinkedIn por alertas no Gmail e análise manual de páginas individuais
+- [x] Extensão: preenchimento automático ao detectar o formulário, etapas seguintes, "Completar com IA", sugestão com "Usar", equivalências de opções, painel novo que não cobre campos

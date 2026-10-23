@@ -1,5 +1,7 @@
 # 03 · Requisitos não funcionais
 
+> **Nota (F10, ADR-020):** o robô local (`tracker-agent`, Playwright) foi removido. Trechos que citam robô, agente local, Easy Apply automático ou kill switch são históricos. A candidatura é feita pelo usuário com o assistente do navegador ([09](09-motor-candidatura.md)); vagas do LinkedIn chegam por alertas no Gmail e pela importação na extensão.
+
 ## Desempenho
 - **RNF-01** Dashboard: telas principais carregam em < 1,5 s com 5.000 vagas e 1.000 candidaturas no banco.
 - **RNF-02** Listas paginadas por cursor; nenhum endpoint retorna mais de 200 itens por página.

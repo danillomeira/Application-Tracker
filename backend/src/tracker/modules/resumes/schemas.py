@@ -71,8 +71,8 @@ class ResumeDraft(BaseModel):
     skill_rows: list[SkillRow]
     experiences: list[DraftExperience] = Field(description="na ordem de exibição")
     project_ids: list[str]
-    used_facts: list[str] = Field(description="ids de experiências/projetos e métricas usados")
-    changes: list[str] = Field(description="o que foi adaptado e por quê, em português")
+    used_facts: list[str] = Field(description="ids de experiências/projetos usados (só os ids, sem texto)")
+    changes: list[str] = Field(description="até 5 itens curtos (uma linha cada), em português: o que foi adaptado e por quê")
 
 
 class CoverLetter(BaseModel):

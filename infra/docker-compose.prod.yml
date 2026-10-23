@@ -1,6 +1,8 @@
 # Implantação completa (VPS ou máquina local): banco, fila, API, workers, beat e dashboard.
+# IA: o Claude Code (CLI `claude`) não existe dentro dos containers. Aqui é obrigatório ANTHROPIC_API_KEY no .env.
+# O currículo entra pelo onboarding do dashboard (fica no banco); não há arquivo para montar.
 # Uso, na raiz do repositório: docker compose -f infra/docker-compose.prod.yml --env-file .env up -d --build
-# O robô do LinkedIn (tracker-agent) e a extensão continuam na sua máquina, apontando para a API.
+# A extensão do navegador continua na sua máquina, apontando para a API.
 name: tracker-prod
 
 x-backend: &backend
@@ -11,9 +13,9 @@ x-backend: &backend
     DATABASE_URL: postgresql+asyncpg://tracker:${POSTGRES_PASSWORD:-tracker}@postgres:5432/tracker
     REDIS_URL: redis://redis:6379/0
     STORAGE_LOCAL_DIR: /app/data/storage
+    BEAT_SCHEDULE_FILE: /app/data/storage/.celerybeat-schedule
   volumes:
     - storage:/app/data/storage
-    - ../data/master-profile.yaml:/app/data/master-profile.yaml:ro
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_healthy }

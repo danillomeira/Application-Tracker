@@ -1,4 +1,4 @@
-# API, worker e beat (o robô do LinkedIn roda na máquina do usuário, não aqui).
+# API, worker e agendador.
 # Build a partir da raiz do repositório: docker build -f infra/Dockerfile.backend .
 FROM python:3.12-slim AS base
 

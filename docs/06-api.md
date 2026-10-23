@@ -1,5 +1,7 @@
 # 06 · API
 
+> **Nota (F10, ADR-020):** o robô local (`tracker-agent`, Playwright) foi removido. Trechos que citam robô, agente local, Easy Apply automático ou kill switch são históricos. A candidatura é feita pelo usuário com o assistente do navegador ([09](09-motor-candidatura.md)); vagas do LinkedIn chegam por alertas no Gmail e pela importação na extensão.
+
 REST JSON em `/api/v1`. Autenticação por cookie de sessão HTTP-only (dashboard) ou token de dispositivo (agente). OpenAPI gerado pelo FastAPI é a fonte dos tipos do frontend.
 
 Convenções:
@@ -47,7 +49,7 @@ Convenções:
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/jobs?quadrant=&status=&q=&sort=priority` | |
-| GET | `/jobs/{id}` | Inclui score, fontes, snapshots |
+| GET | `/jobs/{id}` | Inclui score, fontes, snapshots e checkup de completude/consistência; não atesta legitimidade |
 | POST | `/jobs/import` | `{url}` ou `{text}` (202) |
 | POST | `/jobs/{id}/feedback` | `{verdict, reason}` |
 | POST | `/jobs/{id}/rescore` | |
@@ -118,6 +120,13 @@ Convenções:
 | POST | `/agent/kill` | Kill switch |
 | POST | `/export` · DELETE `/data` | Exportação / exclusão total |
 | GET | `/health` | |
+
+## Extensão do navegador
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/assistant/token` | Gera o token de instalação da extensão (sessão do dashboard) |
+
+A extensão não automatiza nem coleta resultados de busca do LinkedIn. Descoberta de vagas usa boards públicos, fontes ATS configuradas pelo usuário e empresas monitoradas.
 
 ## Webhooks
 | Rota | Origem |

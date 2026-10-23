@@ -6,7 +6,7 @@
 import { AlertTriangle, Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, buttonVariants } from "@/components/ui";
 import { useSend } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -241,9 +241,11 @@ export function GoogleGuide({ redirectUris, configured, connected }: { redirectU
         </Step>
       </Steps>
       <div className="flex flex-wrap items-center gap-2">
-        <a href="/api/v1/integrations/google/connect">
-          <Button disabled={!configured}>{connected ? "Reconectar Google" : "Conectar Google"}</Button>
-        </a>
+        {configured ? (
+          <a href="/api/v1/integrations/google/connect" className={buttonVariants()}>{connected ? "Reconectar Google" : "Conectar Google"}</a>
+        ) : (
+          <Button disabled>Conectar Google</Button>
+        )}
         {!configured && <span className="text-xs text-muted-foreground">Preencha o .env e reinicie a API para liberar o botão.</span>}
       </div>
     </div>
@@ -341,8 +343,10 @@ export function ExtensionGuide() {
         </Step>
         <Step n={4} title="Use">
           <p>
-            Abra uma vaga: o painel aparece no canto. <b>Preencher</b> completa o formulário (perguntas sensíveis como salário e visto ficam para
-            você). Ao clicar num campo vazio aparece uma sugestão 💡. A API precisa estar rodando.
+            Abra uma vaga e o formulário de candidatura: o assistente <b>preenche sozinho</b> o que sabe com segurança (contorno verde), inclusive nas
+            próximas etapas. <b>“Completar com IA”</b> escreve as perguntas abertas (contorno azul, revise). Perguntas sensíveis, como salário e visto,
+            ficam para você. Ao clicar num campo vazio aparece uma sugestão 💡 com “Usar”. Se o painel cobrir um campo, ele muda de lado; dá para
+            arrastar pelo título ou minimizar. A API precisa estar rodando.
           </p>
         </Step>
       </Steps>
@@ -367,6 +371,10 @@ export function LatexGuide() {
               <p className="text-xs text-muted-foreground">
                 Sem o Scoop? Baixe o .zip “x86_64-pc-windows-msvc” em <Ext href="https://github.com/tectonic-typesetting/tectonic/releases">releases do tectonic</Ext>{" "}
                 e coloque o <C>tectonic.exe</C> numa pasta do PATH.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Se o app roda no Windows e o Tectonic está instalado no WSL2, ele é detectado na distro padrão. Verifique com{" "}
+                <C>wsl --exec zsh -ic &apos;tectonic --version&apos;</C> e reinicie o worker.
               </p>
             </>
           ) : (
@@ -439,6 +447,49 @@ export function TagInput({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+export function LinkedinGuide({ gmailConnected }: { gmailConnected: boolean }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        As vagas do LinkedIn entram na aba <b>Vagas</b> por alertas enviados ao Gmail. A extensão não coleta resultados de busca: ela só analisa uma vaga
+        quando você a abre e auxilia no formulário quando você decide se candidatar.
+      </p>
+      <div className="rounded-xl border p-4">
+        <p className="mb-3 text-sm font-semibold">Automático · alertas de vaga pelo Gmail (recomendado)</p>
+        <Steps>
+          <Step n={1} title="No LinkedIn, faça a busca que você quer acompanhar">
+            <p>
+              Em <b>Vagas</b>, digite o cargo (ex.: “Data Engineer”), escolha o local e os filtros (remoto, Easy Apply, data…).
+            </p>
+          </Step>
+          <Step n={2} title={<>Ative o <b>alerta de vaga</b> dessa busca</>}>
+            <p>
+              Ligue a chave <b>“Ativar alerta”</b> (ou “Set alert”) no topo dos resultados. Em <b>Gerenciar alertas</b>, deixe a frequência <b>diária</b> e a
+              notificação por <b>e-mail</b> ligada. Crie um alerta por cargo/local que interessar.
+            </p>
+          </Step>
+          <Step n={3} title="Pronto: cada e-mail de alerta vira vagas no tracker">
+            <p>O app lê os alertas no Gmail, cria as vagas, dá nota e marca o e-mail como “Vagas/LinkedIn”. Não gasta IA para isso.</p>
+            {!gmailConnected && <Tip>Precisa do Gmail conectado (aba Gmail e Agenda).</Tip>}
+          </Step>
+        </Steps>
+      </div>
+      <div className="rounded-xl border p-4">
+        <p className="mb-3 text-sm font-semibold">Na hora · analisar uma vaga específica</p>
+        <Steps>
+          <Step n={1} title="Abra manualmente uma vaga individual no LinkedIn" />
+          <Step n={2} title={<>No painel da extensão, escolha <b>“Avaliar e salvar vaga”</b></>}>
+            <p>A avaliação usa os detalhes da vaga aberta; resultados de busca não são extraídos em lote.</p>
+          </Step>
+          <Step n={3} title="Candidate-se no site quando quiser">
+            <p>A extensão pode preencher o formulário, mas não clica em enviar por você.</p>
+          </Step>
+        </Steps>
+      </div>
     </div>
   );
 }

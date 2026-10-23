@@ -24,12 +24,37 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "company_research": True,
     },
     "automation_policy": {
+        "easy_apply": {
+            "mode": "review",
+            "dry_run": True,
+            "follow_company": False,
+            "auto": {
+                "min_quadrant": "top",
+                "min_chance": 0.7,
+                "min_answer_confidence": 0.9,
+                "allow_tailored_resume": False,
+                "max_per_day": 3,
+            },
+        },
         "email": {"send": "never"},
         "linkedin_messages": {"send": "never"},
+    },
+    "limits": {
+        "easy_apply_per_day": 20,
+        "linkedin_page_views_per_day": 150,
+        "linkedin_searches_per_day": 10,
+        "between_applications_s": [45, 180],
+        "long_pause_every": 5,
+        "window": {"days": [0, 1, 2, 3, 4], "start": "09:00", "end": "19:00"},
+        "per_company_per_month": 3,
     },
     "resume": {
         "match_threshold": 0.75,
         "tailored_requires_approval": True,
+        # CV sob medida: "medium" responde em ~metade do tempo de "high" com o mesmo validador de fatos
+        "tailor_effort": "medium",
+        # ao abrir o formulário de uma vaga top/aposta, a extensão já começa a gerar o CV sob medida
+        "auto_tailor_on_apply": True,
         "default_template": "classic",
     },
     "tracking": {"ghost_after_days": 21, "followup_after_days": 8},

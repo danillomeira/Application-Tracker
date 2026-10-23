@@ -44,7 +44,7 @@ export const TOURS: Record<string, TourStep[]> = {
     {
       target: "job-card",
       title: "Clique no cartão para agir",
-      body: "Abre um painel com o passo a passo: (1) “Abrir a vaga no site” para se candidatar lá, (2) “Já me candidatei” para acompanhar. O X no cartão descarta a vaga (ela some da lista).",
+      body: "Abre um painel com o passo a passo: (1) “Abrir a vaga no site” para se candidatar lá (a extensão preenche o formulário sozinha), (2) “Já me candidatei” para acompanhar. O X no cartão descarta a vaga.",
     },
     {
       target: "filters",
@@ -58,8 +58,8 @@ export const TOURS: Record<string, TourStep[]> = {
     },
     {
       target: "tabs",
-      title: "De onde vêm as vagas",
-      body: "Em “Empresas monitoradas” você escolhe quais empresas acompanhar. Em “Buscas salvas” ficam os termos buscados automaticamente às 9h e 15h nos dias úteis.",
+      title: "Buscar vagas e acompanhar empresas",
+      body: "Em “Buscar vagas”, digite palavras-chave, país e modalidade para ver vagas correspondentes e pesquisar novas fontes. “Empresas (ATS)” configura empresas acompanhadas; “Buscas salvas” mostra e organiza suas pesquisas automáticas.",
     },
     {
       target: "import",
@@ -81,12 +81,6 @@ export const TOURS: Record<string, TourStep[]> = {
       target: "manual",
       title: "Candidatou-se fora do app?",
       body: "Use “Registrar enviei” para adicionar uma candidatura feita em outro site, para que ela também seja acompanhada.",
-    },
-  ],
-  revisao: [
-    {
-      title: "Revisão e pendências",
-      body: "Aqui aparecem as perguntas de formulários que o app não soube responder (responda uma vez e ele aprende) e as candidaturas preparadas pelo robô esperando a sua aprovação antes do envio.",
     },
   ],
   inbox: [

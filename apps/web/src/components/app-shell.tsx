@@ -11,7 +11,6 @@ import {
   Inbox,
   KanbanSquare,
   Menu,
-  MessageSquareText,
   Mic,
   Settings,
   Sparkles,
@@ -27,7 +26,6 @@ import { useEffect, useState } from "react";
 import { api, rawFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useLiveEvents } from "@/lib/ws";
-import { AgentControl } from "./agent-control";
 import { ThemeToggle } from "./theme-toggle";
 import { PageTour, TourButton } from "./tour";
 import { EASE } from "./ui";
@@ -39,7 +37,6 @@ const NAV_GROUPS = [
       { href: "/hoje", label: "Hoje", icon: Home },
       { href: "/vagas", label: "Vagas", icon: Briefcase },
       { href: "/candidaturas", label: "Candidaturas", icon: KanbanSquare },
-      { href: "/revisao", label: "Revisão e pendências", icon: MessageSquareText },
       { href: "/inbox", label: "Inbox", icon: Inbox },
       { href: "/agenda", label: "Agenda", icon: Calendar },
       { href: "/entrevistas", label: "Entrevistas", icon: Mic },
@@ -106,7 +103,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (onboarding.data && !onboarding.data.completed) router.replace("/onboarding");
   }, [onboarding.data, router]);
   useEffect(() => setOpen(false), [pathname]);
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const on = () => setDesktop(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
+  if (onboarding.isError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="font-semibold">Não consegui falar com a API.</p>
+        <p className="max-w-sm text-sm text-muted-foreground">Confira se ela está rodando (porta 8000) e tente de novo.</p>
+        <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" onClick={() => onboarding.refetch()}>
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
   if (!me.isSuccess || !onboarding.data?.completed) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -134,6 +156,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
       </AnimatePresence>
       <aside
+        inert={!open && !desktop}
+        aria-hidden={!open && !desktop ? true : undefined}
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-sidebar px-3 py-4 transition-transform duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
@@ -197,7 +221,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex-1" />
           <TourButton />
-          <AgentControl />
           <Link
             href="/config?tab=notificacoes"
             className="relative grid h-9 w-9 place-items-center rounded-lg transition-colors hover:bg-muted"

@@ -110,6 +110,13 @@ async def register_submission(
     from tracker.modules.jobs import service as job_service
     from tracker.modules.scoring.models import JobScore
 
+    if app.submitted_at is not None and app.applied_snapshot_id is not None:
+        # já registrada: não tira outro snapshot nem muda a data (cliques repetidos, e-mail de confirmação depois)
+        if channel and not app.channel:
+            app.channel = channel
+        if app.status != "submitted" and app.status in ("discovered", "queued", "in_progress", "needs_input", "awaiting_review"):
+            await transition(session, app, "submitted", actor=actor, force=True, payload={"manual": actor == "user"})
+        return
     job = await session.get(Job, app.job_id)
     assert job is not None
     snap = await job_service.snapshot(session, job, "applied")

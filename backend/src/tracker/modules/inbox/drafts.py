@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tracker.core import events
+from tracker.core.humanize import humanize
 from tracker.integrations.claude.client import AIError, AIRequest, get_ai, load_prompt, sessionmaker_from
 from tracker.integrations.google import oauth
 from tracker.integrations.google.gmail import Gmail
@@ -52,7 +53,7 @@ def fallback_availability(name: str, slots: list[str], lang: str) -> DraftText:
 
 
 async def ai_text(session: AsyncSession, task: str, user: str, entity_id: Any = None) -> DraftText:
-    return (
+    out = (
         await get_ai(sessionmaker_from(session)).structured(
             AIRequest(
                 task=task,
@@ -66,6 +67,13 @@ async def ai_text(session: AsyncSession, task: str, user: str, entity_id: Any = 
             DraftText,
         )
     ).output
+    # texto escrito pela IA em seu nome: sem cara de IA (templates do sistema não passam por aqui)
+    return out.model_copy(update={"body": humanize_body(out.body)})
+
+
+def humanize_body(body: str) -> str:
+    """Limpa parágrafo a parágrafo (mantém saudação, quebras de linha e assinatura)."""
+    return "\n".join(humanize(line) if len(line) > 40 else line for line in body.split("\n"))
 
 
 async def save_draft(

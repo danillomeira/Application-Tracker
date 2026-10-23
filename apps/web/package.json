@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3100",
+    "dev": "next dev -H 127.0.0.1 -p 3100",
     "build": "next build",
-    "start": "next start -p 3100",
+    "start": "next start -H 127.0.0.1 -p 3100",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "gen:api": "cd ../../backend && .venv/bin/python -c \"import json,os;os.environ['TRACKER_NO_DOTENV']='1';from tracker.main import app;json.dump(app.openapi(),open('../apps/web/openapi.json','w'),indent=1)\" && cd ../apps/web && openapi-typescript openapi.json -o src/lib/api-schema.d.ts"
+    "gen:api": "cd ../../backend && uv run python -c \"import json,os;os.environ['TRACKER_NO_DOTENV']='1';from tracker.main import app;json.dump(app.openapi(),open('../apps/web/openapi.json','w'),indent=1)\" && cd ../apps/web && openapi-typescript openapi.json -o src/lib/api-schema.d.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.3.0",
@@ -18,7 +18,7 @@
     "clsx": "2.1.1",
     "lucide-react": "0.468.0",
     "motion": "12.43.0",
-    "next": "15.5.4",
+    "next": "15.5.28",
     "openapi-fetch": "0.13.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -35,11 +35,12 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "4.3.4",
     "eslint": "^9",
-    "eslint-config-next": "15.5.4",
+    "eslint-config-next": "15.5.28",
     "jsdom": "25.0.1",
     "openapi-typescript": "7.4.4",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "2.1.8"
-  }
+  },
+  "packageManager": "pnpm@9.15.0"
 }

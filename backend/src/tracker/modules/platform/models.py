@@ -63,15 +63,6 @@ class OAuthCredential(IdMixin, TimestampMixin, Base):
     meta: Mapped[dict[str, Any]] = mapped_column(default=dict)
 
 
-class BrowserSessionMeta(IdMixin, TimestampMixin, Base):
-    __tablename__ = "browser_session_meta"
-    site: Mapped[str] = mapped_column(Text, unique=True)
-    last_login_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_safety_stop_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    paused_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    notes: Mapped[str | None] = mapped_column(Text)
-
-
 class IntegrationState(IdMixin, TimestampMixin, Base):
     """Saúde das integrações (RF-PLA-05) e cursores (ex.: historyId do Gmail)."""
 

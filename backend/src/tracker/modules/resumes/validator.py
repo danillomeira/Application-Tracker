@@ -37,7 +37,7 @@ def _strip_md(text: str) -> str:
 
 def unknown_terms(text: str, master: MasterProfile, idx: dict[str, str] | None = None) -> list[str]:
     idx = idx if idx is not None else facts.skill_index(master)
-    master_blob = facts.norm(master.model_dump_json())
+    master_blob = facts.norm(facts.master_text(master))
     plain = " " + facts.norm(_strip_md(text)) + " "
     found: list[str] = []
     for term in TECH_TERMS:

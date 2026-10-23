@@ -34,13 +34,14 @@ async def test_dev_login_sets_cookie(anon_client: AsyncClient) -> None:
 
 
 async def test_settings_merge_and_audit(client: AsyncClient, session) -> None:
-    r = await client.get("/api/v1/settings/limits")
-    assert r.json()["easy_apply_per_day"] == 20
-    r = await client.put("/api/v1/settings/limits", json={"easy_apply_per_day": 12})
+    r = await client.get("/api/v1/settings/tracking")
+    assert r.json()["ghost_after_days"] == 21
+    r = await client.put("/api/v1/settings/tracking", json={"followup_after_days": 5})
     assert r.status_code == 200
     body = r.json()
-    assert body["easy_apply_per_day"] == 12
-    assert body["linkedin_searches_per_day"] == 10  # padrão preservado
+    assert body["followup_after_days"] == 5
+    assert body["ghost_after_days"] == 21  # padrão preservado
+    assert (await client.get("/api/v1/settings/limits")).status_code == 404  # limites do robô não existem mais
     logs = (await session.scalars(select(AuditLog))).all()
     assert any(log.action == "settings.update" for log in logs)
 

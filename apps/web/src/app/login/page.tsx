@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { LogIn, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
-import { Button, Card, EASE } from "@/components/ui";
+import { Button, Card, EASE, buttonVariants } from "@/components/ui";
 
 export default function LoginPage() {
   const config = useQuery({
@@ -33,11 +33,15 @@ export default function LoginPage() {
                 </Button>
               </form>
             )}
-            <a href="/api/v1/auth/google/login" aria-disabled={!config.data?.google}>
-              <Button className="w-full" variant={config.data?.dev_login ? "outline" : "default"} size="lg" disabled={!config.data?.google}>
+            {config.data?.google ? (
+              <a href="/api/v1/auth/google/login" className={buttonVariants({ className: "w-full", variant: config.data?.dev_login ? "outline" : "default", size: "lg" })}>
+                Entrar com Google
+              </a>
+            ) : (
+              <Button className="w-full" variant="outline" size="lg" disabled>
                 Entrar com Google
               </Button>
-            </a>
+            )}
             {config.data && !config.data.google && (
               <p className="text-xs text-muted-foreground">
                 {config.data.dev_login

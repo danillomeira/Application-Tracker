@@ -13,7 +13,7 @@ Este arquivo é lido primeiro por qualquer agente de IA que trabalhe neste repos
 | Qualquer coisa | `02-requisitos-funcionais.md` (seção do módulo), `03-requisitos-nao-funcionais.md`, `05-modelo-de-dados.md` |
 | Currículos | `11-curriculos.md`, `08-ia-claude.md` |
 | Vagas e avaliação | `10-motor-avaliacao.md`, `07-integracoes.md` |
-| Robô de candidatura | `09-motor-candidatura.md`, `12-seguranca-privacidade.md` |
+| Assistente do navegador (extensão) | `09-motor-candidatura.md`, `12-seguranca-privacidade.md` |
 | Gmail / Calendar / Telegram | `07-integracoes.md`, `12-seguranca-privacidade.md` |
 | Qualquer chamada ao Claude | `08-ia-claude.md` |
 | Endpoints / frontend | `06-api.md`, `04-arquitetura.md` |
@@ -22,7 +22,7 @@ Este arquivo é lido primeiro por qualquer agente de IA que trabalhe neste repos
 
 1. **Nada sai em nome do usuário sem política.** Candidaturas, e-mails e mensagens só são enviados se `automation_policy` permitir. E-mails e mensagens no LinkedIn **nunca** são enviados automaticamente: só rascunhos.
 2. **Sem alucinação de currículo.** Todo CV ou resposta gerado passa pelo validador determinístico de fatos (`11-curriculos.md` §6). Skill, empresa, cargo, data ou métrica fora do currículo mestre faz a geração falhar.
-3. **Nunca contornar proteções.** Captcha, verificação, 2FA ou aviso de atividade incomum fazem o robô **parar**, salvar o estado e notificar. Nada de solvers de captcha, rotação de IP, fingerprint spoofing ou contas extras.
+3. **Nunca contornar proteções nem automatizar cliques.** Não existe robô (ADR-020): a extensão só lê a página aberta pelo usuário, preenche e sugere; nunca clica em enviar, nunca resolve captcha.
 4. **Segredos fora do código.** Só via variáveis de ambiente. Tokens OAuth e cookies criptografados em repouso (`12-seguranca-privacidade.md`).
 5. **Tudo explicável.** Notas, classificações e decisões automáticas guardam `reasons` e `sources`.
 6. **Snapshot do que foi enviado.** Cada candidatura guarda a versão exata do CV (PDF + hash), as respostas e a descrição da vaga no momento do envio. Registros enviados são imutáveis.
@@ -67,4 +67,4 @@ Este arquivo é lido primeiro por qualquer agente de IA que trabalhe neste repos
 - Siga a ordem das fases do roadmap. Não implemente uma fase futura sem pedido explícito.
 - Antes de uma tarefa grande, confira `docs/17-questoes-abertas.md`. Se uma questão bloquear o trabalho, use o padrão assumido que está lá e avise.
 - Ao tomar uma decisão de arquitetura nova, registre um ADR em `docs/15-decisoes.md`.
-- Para o robô do LinkedIn, desenvolva e teste contra **fixtures HTML locais** (`backend/tests/fixtures/linkedin/`), nunca contra o site real em testes automatizados.
+- Para a extensão, desenvolva e teste contra **páginas HTML locais** (`backend/tests/fixtures/`), nunca contra sites reais em testes automatizados.

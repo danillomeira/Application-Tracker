@@ -4,6 +4,7 @@ import { UserRound } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { TagInput } from "@/components/setup-guides";
 import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, Tabs, Textarea } from "@/components/ui";
 import { rawFetch } from "@/lib/api";
 import { useGet, useSend, useTask } from "@/lib/hooks";
@@ -153,36 +154,38 @@ function PrefsTab() {
   useEffect(() => { if (data) setP(data); }, [data]);
   const save = useSend("PUT", "/api/v1/profile/preferences", { success: "Preferências salvas", invalidate: [["prefs"]] });
   if (!p) return null;
-  const list = (k: string) => ((p[k] as string[]) ?? []).join(", ");
-  const setList = (k: string, v: string) => setP({ ...p, [k]: v.split(",").map((x) => x.trim()).filter(Boolean) });
+  const list = (k: string) => (p[k] as string[]) ?? [];
+  const setList = (k: string, v: string[]) => setP({ ...p, [k]: v });
   const money = (k: "salary_expectation" | "min_salary", regime: string) => ((p[k] as Record<string, Record<string, number>>)?.[regime]?.BRL ?? "") as number | "";
   const setMoney = (k: "salary_expectation" | "min_salary", regime: string, v: string) => {
     const cur = { ...((p[k] as Record<string, Record<string, number>>) ?? {}) };
-    cur[regime] = { ...(cur[regime] ?? {}), BRL: Number(v) };
+    if (v.trim() === "") {
+      // campo vazio = sem valor (não "R$ 0", que eliminaria todas as vagas no mínimo)
+      const others = { ...(cur[regime] ?? {}) };
+      delete others.BRL;
+      if (Object.keys(others).length) cur[regime] = others;
+      else delete cur[regime];
+    } else cur[regime] = { ...(cur[regime] ?? {}), BRL: Number(v) };
     setP({ ...p, [k]: cur });
   };
   return (
     <Card className="grid gap-3 md:grid-cols-2">
-      <Field label="Cargos-alvo (vírgula)"><Input value={list("target_roles")} onChange={(e) => setList("target_roles", e.target.value)} /></Field>
-      <Field label="Stacks"><Input value={list("stacks")} onChange={(e) => setList("stacks", e.target.value)} /></Field>
-      <Field label="Modelos de trabalho (remote, hybrid, onsite)"><Input value={list("work_models")} onChange={(e) => setList("work_models", e.target.value)} /></Field>
-      <Field label="Cidades aceitas"><Input value={list("locations")} onChange={(e) => setList("locations", e.target.value)} /></Field>
-      <Field label="Regimes (CLT, PJ)"><Input value={list("regimes")} onChange={(e) => setList("regimes", e.target.value)} /></Field>
-      <Field label="Senioridades (junior, mid, senior)"><Input value={list("seniorities")} onChange={(e) => setList("seniorities", e.target.value)} /></Field>
+      <Field label="Cargos-alvo"><TagInput value={list("target_roles")} onChange={(v) => setList("target_roles", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Stacks"><TagInput value={list("stacks")} onChange={(v) => setList("stacks", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Modelos de trabalho (remote, hybrid, onsite)"><TagInput value={list("work_models")} onChange={(v) => setList("work_models", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Cidades aceitas"><TagInput value={list("locations")} onChange={(v) => setList("locations", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Regimes (CLT, PJ)"><TagInput value={list("regimes")} onChange={(v) => setList("regimes", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Senioridades (junior, mid, senior)"><TagInput value={list("seniorities")} onChange={(v) => setList("seniorities", v)} placeholder="Digite e tecle Enter" /></Field>
       <Field label="Pretensão CLT (R$/mês)" hint="usada nos formulários; nunca gerada pela IA"><Input type="number" value={money("salary_expectation", "CLT")} onChange={(e) => setMoney("salary_expectation", "CLT", e.target.value)} /></Field>
       <Field label="Pretensão PJ (R$/mês)"><Input type="number" value={money("salary_expectation", "PJ")} onChange={(e) => setMoney("salary_expectation", "PJ", e.target.value)} /></Field>
       <Field label="Mínimo CLT (R$/mês)" hint="abaixo disso a vaga é eliminada"><Input type="number" value={money("min_salary", "CLT")} onChange={(e) => setMoney("min_salary", "CLT", e.target.value)} /></Field>
       <Field label="Mínimo PJ (R$/mês)"><Input type="number" value={money("min_salary", "PJ")} onChange={(e) => setMoney("min_salary", "PJ", e.target.value)} /></Field>
-      <Field label="Setores preferidos"><Input value={list("sectors_preferred")} onChange={(e) => setList("sectors_preferred", e.target.value)} /></Field>
-      <Field label="Setores evitados"><Input value={list("sectors_avoided")} onChange={(e) => setList("sectors_avoided", e.target.value)} /></Field>
+      <Field label="Setores preferidos"><TagInput value={list("sectors_preferred")} onChange={(v) => setList("sectors_preferred", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Setores evitados"><TagInput value={list("sectors_avoided")} onChange={(v) => setList("sectors_avoided", v)} placeholder="Digite e tecle Enter" /></Field>
       <Field label="Aviso prévio (dias)"><Input type="number" value={String(p.notice_period_days ?? 30)} onChange={(e) => setP({ ...p, notice_period_days: Number(e.target.value) })} /></Field>
       <div className="flex flex-col gap-2 text-sm">
         <label className="flex gap-2"><input type="checkbox" checked={!!p.relocation} onChange={(e) => setP({ ...p, relocation: e.target.checked })} /> Aceito mudar de cidade</label>
         <label className="flex gap-2"><input type="checkbox" checked={!!p.international} onChange={(e) => setP({ ...p, international: e.target.checked })} /> Vagas internacionais</label>
-        <label className="flex gap-2">
-          <input type="checkbox" checked={!!p.linkedin_risk_accepted} onChange={(e) => setP({ ...p, linkedin_risk_accepted: e.target.checked })} />
-          <span>Entendo que automatizar o LinkedIn viola o User Agreement e pode restringir minha conta (docs/12 §5)</span>
-        </label>
       </div>
       <div className="md:col-span-2"><Button onClick={() => save.mutate(p)}>Salvar preferências</Button></div>
     </Card>
@@ -215,7 +218,7 @@ function AnswersTab() {
               <td>{String(a.answer.value)}</td>
               <td>{a.field_kind}</td>
               <td>{a.use_count}</td>
-              <td><Button size="sm" variant="ghost" onClick={() => del.mutate(a.id)}>Excluir</Button></td>
+              <td><Button size="sm" variant="ghost" onClick={() => window.confirm("Excluir este item?") && del.mutate(a.id)}>Excluir</Button></td>
             </tr>
           ))}
         </tbody>
@@ -245,7 +248,7 @@ function StarTab() {
       <div className="space-y-2">
         {data?.map((s) => (
           <Card key={s.id} className="text-sm">
-            <div className="flex justify-between"><p className="font-medium">{s.title}</p><Button size="sm" variant="ghost" onClick={() => del.mutate(s.id)}>Excluir</Button></div>
+            <div className="flex justify-between"><p className="font-medium">{s.title}</p><Button size="sm" variant="ghost" onClick={() => window.confirm("Excluir este item?") && del.mutate(s.id)}>Excluir</Button></div>
             <p><b>S:</b> {s.situation}</p><p><b>T:</b> {s.task}</p><p><b>A:</b> {s.action}</p><p><b>R:</b> {s.result}</p>
             <div className="mt-1 flex gap-1">{s.competencies.map((c) => <Badge key={c}>{c}</Badge>)}</div>
           </Card>
@@ -308,7 +311,7 @@ function DocsTab() {
         <Card key={d.id} className="flex items-center justify-between text-sm">
           <a className="text-primary underline" href={`/api/v1/documents/${d.id}/download`}>{d.title}</a>
           <span className="text-xs text-muted-foreground">{d.kind} · {formatDateTime(d.created_at)}</span>
-          <Button size="sm" variant="ghost" onClick={() => del.mutate(d.id)}>Excluir</Button>
+          <Button size="sm" variant="ghost" onClick={() => window.confirm("Excluir este item?") && del.mutate(d.id)}>Excluir</Button>
         </Card>
       ))}
     </div>
@@ -332,7 +335,7 @@ function RefsTab() {
       {data?.map((r) => (
         <Card key={r.id} className="flex items-center justify-between text-sm">
           <span>{r.name} · {r.relation} · {r.contact} {r.consent ? <Badge tone="success">consentiu</Badge> : <Badge tone="warning">pedir consentimento</Badge>}</span>
-          <Button size="sm" variant="ghost" onClick={() => del.mutate(r.id)}>Excluir</Button>
+          <Button size="sm" variant="ghost" onClick={() => window.confirm("Excluir este item?") && del.mutate(r.id)}>Excluir</Button>
         </Card>
       ))}
     </div>

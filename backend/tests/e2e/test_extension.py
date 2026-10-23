@@ -175,6 +175,66 @@ async def test_extension_end_to_end(servers, session, tmp_path) -> None:
     app = await session.scalar(select(Application).where(Application.job_id == __import__("uuid").UUID(job_id)))
     assert app is not None and app.status == "submitted" and app.channel == "assisted"
     answers = (await session.scalars(select(ApplicationAnswer).where(ApplicationAnswer.application_id == app.id))).all()
-    assert any("sponsorship" in a.question_text and a.answer["value"] == "No" for a in answers)
+    assert any("sponsorship" in a.question_text and a.answer["value"] == "No" and a.resolution == "user" for a in answers)
+    assert any(a.resolution == "profile" and a.answer["value"] == "Ana" for a in answers)  # origem de cada resposta
+    assert app.resume_render_id is not None  # o PDF exato que foi anexado (regra 6)
+    # só o que o usuário digitou vira aprendizado; o que veio do perfil não duplica no banco
+    assert await session.scalar(select(AnswerBankEntry).where(AnswerBankEntry.canonical_question == "First name")) is None
     learned = await session.scalar(select(AnswerBankEntry).where(AnswerBankEntry.canonical_question.like("%sponsorship%")))
     assert learned is not None and learned.answer["value"] == "No"  # da próxima vez, sem perguntar
+
+
+async def test_extension_respects_context_and_switches(servers, session, tmp_path) -> None:
+    """Página que não é de vaga: nada é preenchido nem anexado. Desligado ou site ignorado: nem o painel aparece."""
+    await _seed(session, servers)
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            str(tmp_path / "profile2"),
+            headless=False,
+            args=["--headless=new", f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+        )
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else await ctx.wait_for_event("serviceworker")
+            await sw.evaluate(
+                "cfg => Promise.all([chrome.storage.sync.set(cfg.sync), chrome.storage.local.set({ token: cfg.token })])",
+                {"sync": {"apiUrl": servers["api"], "enabled": True, "ignoredDomains": []}, "token": TOKEN},
+            )
+            page = await ctx.new_page()
+            # a página não consegue ler o token pela extensão
+            await page.goto(f"{servers['web']}/unrelated_form.html")
+            await page.wait_for_timeout(3500)
+            assert await page.input_value("#name") == ""
+            assert await page.input_value("#mail") == ""
+            assert await page.evaluate("document.getElementById('doc').files.length") == 0
+            assert await page.locator("#tracker-assistant").count() == 0
+
+            # desligado: nem na página de candidatura
+            await sw.evaluate("() => chrome.storage.sync.set({ enabled: false })")
+            await page.goto(f"{servers['web']}/apply_form.html")
+            await page.wait_for_timeout(3500)
+            assert await page.locator("#tracker-assistant").count() == 0
+            assert await page.input_value("#first") == ""
+
+            # ligar de novo na mesma aba: o assistente volta sem recarregar
+            await sw.evaluate("() => chrome.storage.sync.set({ enabled: true })")
+            await page.locator("#tracker-assistant").get_by_text("Senior Data Engineer").wait_for(timeout=15000)
+            await page.wait_for_function("document.getElementById('first').value === 'Ana'", timeout=15000)
+
+            # site ignorado: o painel some na hora
+            host = servers["web"].removeprefix("http://")
+            await sw.evaluate("h => chrome.storage.sync.set({ ignoredDomains: [h] })", host)
+            await page.locator("#tracker-assistant").wait_for(state="detached", timeout=5000)
+
+            # botões do painel não respondem a cliques simulados pela página
+            await sw.evaluate("() => chrome.storage.sync.set({ ignoredDomains: [] })")
+            await page.locator("#tracker-assistant").get_by_text("Já me candidatei").wait_for(timeout=15000)
+            await page.evaluate(
+                "[...document.getElementById('tracker-assistant').shadowRoot.querySelectorAll('button')]"
+                ".find(b => b.textContent.includes('Já me candidatei')).click()"
+            )
+            await page.wait_for_timeout(1500)
+        finally:
+            await ctx.close()
+    await session.close()
+    apps = (await session.scalars(select(Application).where(Application.submitted_at.is_not(None)))).all()
+    assert apps == []  # o clique forjado não registrou candidatura

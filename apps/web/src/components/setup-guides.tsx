@@ -6,7 +6,7 @@
 import { AlertTriangle, Check, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, buttonVariants } from "@/components/ui";
 import { useSend } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -241,9 +241,11 @@ export function GoogleGuide({ redirectUris, configured, connected }: { redirectU
         </Step>
       </Steps>
       <div className="flex flex-wrap items-center gap-2">
-        <a href="/api/v1/integrations/google/connect">
-          <Button disabled={!configured}>{connected ? "Reconectar Google" : "Conectar Google"}</Button>
-        </a>
+        {configured ? (
+          <a href="/api/v1/integrations/google/connect" className={buttonVariants()}>{connected ? "Reconectar Google" : "Conectar Google"}</a>
+        ) : (
+          <Button disabled>Conectar Google</Button>
+        )}
         {!configured && <span className="text-xs text-muted-foreground">Preencha o .env e reinicie a API para liberar o botão.</span>}
       </div>
     </div>
@@ -341,8 +343,10 @@ export function ExtensionGuide() {
         </Step>
         <Step n={4} title="Use">
           <p>
-            Abra uma vaga: o painel aparece no canto. <b>Preencher</b> completa o formulário (perguntas sensíveis como salário e visto ficam para
-            você). Ao clicar num campo vazio aparece uma sugestão 💡. A API precisa estar rodando.
+            Abra uma vaga e o formulário de candidatura: o assistente <b>preenche sozinho</b> o que sabe com segurança (contorno verde), inclusive nas
+            próximas etapas. <b>“Completar com IA”</b> escreve as perguntas abertas (contorno azul, revise). Perguntas sensíveis, como salário e visto,
+            ficam para você. Ao clicar num campo vazio aparece uma sugestão 💡 com “Usar”. Se o painel cobrir um campo, ele muda de lado; dá para
+            arrastar pelo título ou minimizar. A API precisa estar rodando.
           </p>
         </Step>
       </Steps>
@@ -439,6 +443,49 @@ export function TagInput({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+export function LinkedinGuide({ gmailConnected }: { gmailConnected: boolean }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        As vagas do LinkedIn entram na aba <b>Vagas</b> por dois caminhos, sem robô e sem risco para a sua conta. Depois você se candidata normalmente,
+        com a extensão preenchendo o formulário (inclusive o Easy Apply).
+      </p>
+      <div className="rounded-xl border p-4">
+        <p className="mb-3 text-sm font-semibold">Automático · alertas de vaga pelo Gmail (recomendado)</p>
+        <Steps>
+          <Step n={1} title="No LinkedIn, faça a busca que você quer acompanhar">
+            <p>
+              Em <b>Vagas</b>, digite o cargo (ex.: “Data Engineer”), escolha o local e os filtros (remoto, Easy Apply, data…).
+            </p>
+          </Step>
+          <Step n={2} title={<>Ative o <b>alerta de vaga</b> dessa busca</>}>
+            <p>
+              Ligue a chave <b>“Ativar alerta”</b> (ou “Set alert”) no topo dos resultados. Em <b>Gerenciar alertas</b>, deixe a frequência <b>diária</b> e a
+              notificação por <b>e-mail</b> ligada. Crie um alerta por cargo/local que interessar.
+            </p>
+          </Step>
+          <Step n={3} title="Pronto: cada e-mail de alerta vira vagas no tracker">
+            <p>O app lê os alertas no Gmail, cria as vagas, dá nota e marca o e-mail como “Vagas/LinkedIn”. Não gasta IA para isso.</p>
+            {!gmailConnected && <Tip>Precisa do Gmail conectado (aba Gmail e Agenda).</Tip>}
+          </Step>
+        </Steps>
+      </div>
+      <div className="rounded-xl border p-4">
+        <p className="mb-3 text-sm font-semibold">Na hora · importar a busca que está na sua tela</p>
+        <Steps>
+          <Step n={1} title="Com a extensão instalada, abra uma busca de vagas no LinkedIn" />
+          <Step n={2} title={<>No painel do assistente, clique em <b>“Importar para o tracker”</b></>}>
+            <p>Ele envia as vagas visíveis na lista. Role a lista para carregar mais e importe de novo.</p>
+          </Step>
+          <Step n={3} title="Ao abrir uma vaga, a descrição completa entra sozinha">
+            <p>A lista só tem título, empresa e local; quando você abre a vaga, o assistente lê a descrição e refaz a nota.</p>
+          </Step>
+        </Steps>
+      </div>
     </div>
   );
 }

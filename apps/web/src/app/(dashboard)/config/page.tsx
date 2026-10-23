@@ -1,12 +1,12 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Settings } from "lucide-react";
-import { AiGuide, ExtensionGuide, GoogleGuide, LatexGuide, TelegramGuide } from "@/components/setup-guides";
-import { Badge, Button, Card, CardTitle, Field, Input, PageHeader, Select, Skeleton, Tabs } from "@/components/ui";
+import { AiGuide, ExtensionGuide, GoogleGuide, LatexGuide, LinkedinGuide, TelegramGuide } from "@/components/setup-guides";
+import { Badge, Button, Card, CardTitle, Field, Input, PageHeader, Skeleton, Tabs, buttonVariants } from "@/components/ui";
 import { rawFetch } from "@/lib/api";
 import { useGet, useSend, useTask } from "@/lib/hooks";
 import { formatDateTime } from "@/lib/utils";
@@ -15,7 +15,6 @@ type Integrations = {
   google: { configured: boolean; connected: boolean; status: string | null; account: string; push: boolean; push_endpoint: string; last_sync: string | null; last_error: string | null };
   anthropic: { configured: boolean; fake: boolean; model_default: string; budget_usd: number };
   telegram: { bot_configured: boolean };
-  agent: { token_set: boolean };
 };
 type Weights = { version: number; chance_weights: Record<string, number>; attractiveness_weights: Record<string, number>; thresholds: Record<string, number>; source: string; is_current: boolean; metrics: Record<string, number> };
 
@@ -34,8 +33,11 @@ export default function ConfigPage() {
 
 function Config() {
   const sp = useSearchParams();
-  const initial = (TABS.find((t) => t.value === sp.get("tab"))?.value ?? "integracoes") as Tab;
-  const [tab, setTab] = useState<Tab>(initial);
+  const router = useRouter();
+  const pathname = usePathname();
+  // a aba vem da URL: o sino de notificações e o voltar do navegador funcionam mesmo já estando aqui
+  const tab = (TABS.find((t) => t.value === sp.get("tab"))?.value ?? "integracoes") as Tab;
+  const setTab = (v: Tab) => router.replace(`${pathname}?tab=${v}`, { scroll: false });
   useEffect(() => { if (sp.get("google") === "ok") toast.success("Google conectado"); }, [sp]);
   return (
     <div>
@@ -98,16 +100,11 @@ function IntegrationsTab() {
       <GuideCard title="Extensão do navegador" ok={c.extension.ok} detail="painel da vaga, preenchimento e registro da candidatura">
         <ExtensionGuide />
       </GuideCard>
+      <GuideCard title="Vagas do LinkedIn" ok={c.google.ok} detail="alertas de vaga pelo Gmail e importação pela extensão">
+        <LinkedinGuide gmailConnected={c.google.ok} />
+      </GuideCard>
       <GuideCard title="PDF dos currículos (tectonic)" ok={c.latex.ok} detail={c.latex.detail}>
         <LatexGuide />
-      </GuideCard>
-      <GuideCard title="Robô local do LinkedIn (avançado)" ok={data.agent.token_set} detail="Easy Apply assistido, na sua sessão">
-        {!data.agent.token_set && <p className="mb-2 text-sm text-warning">Rode <code>uv run tracker-init</code> (ou defina AGENT_DEVICE_TOKEN no .env).</p>}
-        <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-          <li><code>cd backend && uv run tracker-agent login</code>: entre no LinkedIn na janela que abrir (uma vez)</li>
-          <li><code>uv run tracker-agent check</code>: testa a conexão com a API</li>
-          <li><code>uv run tracker-agent run</code>: processa a fila (o botão “Parar” no topo interrompe em até 5 s)</li>
-        </ol>
       </GuideCard>
     </div>
   );
@@ -115,24 +112,16 @@ function IntegrationsTab() {
 
 function useSetting<T>(key: string) {
   const q = useGet<T>(["settings", key], `/api/v1/settings/${key}`);
-  const save = useSend<T>("PUT", `/api/v1/settings/${key}`, { success: "Configuração salva", invalidate: [["settings", key], ["agent"]] });
+  const save = useSend<T>("PUT", `/api/v1/settings/${key}`, { success: "Configuração salva", invalidate: [["settings", key]] });
   return { data: q.data, save };
 }
 
-type Policy = { easy_apply: { mode: string; dry_run: boolean; follow_company: boolean; auto: { min_quadrant: string; min_chance: number; min_answer_confidence: number; allow_tailored_resume: boolean; max_per_day: number } } };
-type Limits = { easy_apply_per_day: number; linkedin_page_views_per_day: number; linkedin_searches_per_day: number; between_applications_s: number[]; long_pause_every: number; window: { days: number[]; start: string; end: string }; per_company_per_month: number };
 
 function AutomationTab() {
   const flags = useSetting<Record<string, boolean>>("flags");
-  const policy = useSetting<Policy>("automation_policy");
-  const limits = useSetting<Limits>("limits");
   const resume = useSetting<{ match_threshold: number; tailored_requires_approval: boolean }>("resume");
   const tracking = useSetting<{ ghost_after_days: number; followup_after_days: number }>("tracking");
-  const [p, setP] = useState<Policy | null>(null);
-  const [l, setL] = useState<Limits | null>(null);
-  useEffect(() => { if (policy.data) setP(policy.data); }, [policy.data]);
-  useEffect(() => { if (limits.data) setL(limits.data); }, [limits.data]);
-  const FLAG_LABEL: Record<string, string> = { gmail: "Ler Gmail", gmail_labels: "Marcar e-mails de vaga no Gmail (Vagas/…)", calendar: "Google Agenda", telegram: "Telegram", job_sources: "Coletar vagas de ATS", linkedin_agent: "Robô do LinkedIn", company_research: "Pesquisa de empresas", auto_apply: "Permitir modo automático" };
+  const FLAG_LABEL: Record<string, string> = { gmail: "Ler Gmail", gmail_labels: "Marcar e-mails de vaga no Gmail (Vagas/…)", calendar: "Google Agenda", telegram: "Telegram", job_sources: "Coletar vagas de sites de empresas", company_research: "Pesquisa de empresas" };
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card className="space-y-2 text-sm">
@@ -143,44 +132,10 @@ function AutomationTab() {
           </label>
         ))}
       </Card>
-      {p && (
-        <Card className="space-y-2 text-sm">
-          <CardTitle>Easy Apply</CardTitle>
-          <Field label="Modo">
-            <Select value={p.easy_apply.mode} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, mode: e.target.value } })}>
-              <option value="review">Revisão (eu aprovo cada envio)</option>
-              <option value="auto">Automático com limites</option>
-            </Select>
-          </Field>
-          <label className="flex gap-2"><input type="checkbox" checked={p.easy_apply.dry_run} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, dry_run: e.target.checked } })} /> Simulação (preenche tudo, não envia)</label>
-          <label className="flex gap-2"><input type="checkbox" checked={p.easy_apply.follow_company} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, follow_company: e.target.checked } })} /> Seguir a empresa ao enviar</label>
-          {p.easy_apply.mode === "auto" && (
-            <div className="grid grid-cols-2 gap-2 rounded-md border p-2">
-              <Field label="Quadrantes"><Select value={p.easy_apply.auto.min_quadrant} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, auto: { ...p.easy_apply.auto, min_quadrant: e.target.value } } })}><option value="top">Só prioridade máxima</option><option value="top_or_volume">Máxima e volume</option></Select></Field>
-              <Field label="Chance mínima"><Input type="number" value={p.easy_apply.auto.min_chance} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, auto: { ...p.easy_apply.auto, min_chance: Number(e.target.value) } } })} /></Field>
-              <Field label="Confiança mínima das respostas"><Input type="number" step="0.05" value={p.easy_apply.auto.min_answer_confidence} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, auto: { ...p.easy_apply.auto, min_answer_confidence: Number(e.target.value) } } })} /></Field>
-              <Field label="Máximo automático/dia"><Input type="number" value={p.easy_apply.auto.max_per_day} onChange={(e) => setP({ ...p, easy_apply: { ...p.easy_apply, auto: { ...p.easy_apply.auto, max_per_day: Number(e.target.value) } } })} /></Field>
-              <p className="col-span-2 text-xs text-warning">Também é preciso ligar “Permitir modo automático” em Módulos.</p>
-            </div>
-          )}
-          <p className="text-xs text-muted-foreground">E-mails e mensagens do LinkedIn nunca são enviados automaticamente (fixo).</p>
-          <Button onClick={() => policy.save.mutate(p)}>Salvar</Button>
-        </Card>
-      )}
-      {l && (
-        <Card className="space-y-2 text-sm">
-          <CardTitle>Limites do robô</CardTitle>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Candidaturas por dia"><Input type="number" value={l.easy_apply_per_day} onChange={(e) => setL({ ...l, easy_apply_per_day: Number(e.target.value) })} /></Field>
-            <Field label="Buscas por dia"><Input type="number" value={l.linkedin_searches_per_day} onChange={(e) => setL({ ...l, linkedin_searches_per_day: Number(e.target.value) })} /></Field>
-            <Field label="Janela: início"><Input value={l.window.start} onChange={(e) => setL({ ...l, window: { ...l.window, start: e.target.value } })} /></Field>
-            <Field label="Janela: fim"><Input value={l.window.end} onChange={(e) => setL({ ...l, window: { ...l.window, end: e.target.value } })} /></Field>
-            <Field label="Pausa longa a cada N"><Input type="number" value={l.long_pause_every} onChange={(e) => setL({ ...l, long_pause_every: Number(e.target.value) })} /></Field>
-            <Field label="Vagas por empresa/mês"><Input type="number" value={l.per_company_per_month} onChange={(e) => setL({ ...l, per_company_per_month: Number(e.target.value) })} /></Field>
-          </div>
-          <Button onClick={() => limits.save.mutate(l)}>Salvar</Button>
-        </Card>
-      )}
+      <Card className="space-y-2 text-sm">
+        <CardTitle>Envios</CardTitle>
+        <p className="text-muted-foreground">Nada é enviado em seu nome: você se candidata no site da vaga (o assistente do navegador preenche) e e-mails ficam como rascunho para você revisar e enviar.</p>
+      </Card>
       <Card className="space-y-2 text-sm">
         <CardTitle>Currículos e acompanhamento</CardTitle>
         {resume.data && (
@@ -271,7 +226,7 @@ function NotificationsTab() {
           <CardTitle>Silêncio</CardTitle>
           <Field label="Das"><Input defaultValue={data.quiet_hours.start} onBlur={(e) => save.mutate({ ...data, quiet_hours: { ...data.quiet_hours, start: e.target.value } })} /></Field>
           <Field label="Até"><Input defaultValue={data.quiet_hours.end} onBlur={(e) => save.mutate({ ...data, quiet_hours: { ...data.quiet_hours, end: e.target.value } })} /></Field>
-          <p className="text-xs text-muted-foreground">Paradas de segurança do robô e convites de entrevista avisam sempre.</p>
+          <p className="text-xs text-muted-foreground">Convites de entrevista avisam sempre.</p>
         </Card>
       )}
       <Card className="space-y-2 text-sm lg:col-span-2">
@@ -320,7 +275,7 @@ function SystemTab() {
       <Card className="space-y-2 text-sm">
         <CardTitle>Configuração inicial</CardTitle>
         <p className="text-muted-foreground">Reenviar o currículo, mudar cargos-alvo ou rever os guias de integração.</p>
-        <a href="/onboarding"><Button variant="soft">Abrir o onboarding</Button></a>
+        <a href="/onboarding" className={buttonVariants({ variant: "soft" })}>Abrir o onboarding</a>
       </Card>
       <Card className="space-y-2 text-sm">
         <CardTitle>Seus dados</CardTitle>

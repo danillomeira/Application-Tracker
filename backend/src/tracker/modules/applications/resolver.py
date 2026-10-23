@@ -396,18 +396,18 @@ async def resolve_core(
             else:
                 unresolved.append(f)
     answers = await ai_batch(session, unresolved, master, job) if allow_ai else {}
+    usable: dict[str, BatchItem] = {}  # só respostas que passaram no validador de fatos viram sugestão (regra 2)
     for f in unresolved:
         a = answers.get(f.key)
         v = _ai_value(f, a) if a else None
         ok_text = v is not None and (f.kind not in ("text", "textarea") or validate_free_text(str(v), master).passed)
+        if a and ok_text:
+            usable[f.key] = a
         if a and ok_text and a.confidence >= float(cfg["min_confidence"]):
             out.values.append(Resolved(f.key, v, "ai", a.confidence))
             continue
-        pending = f.model_copy()
-        if a:
-            pending.current_value = a.value
-        out.pending.append(pending)
-    return out, answers
+        out.pending.append(f.model_copy())
+    return out, usable
 
 
 async def resolve_fields(

@@ -3,7 +3,7 @@
 import { Calendar } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
+import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, buttonVariants } from "@/components/ui";
 import { useGet, useSend } from "@/lib/hooks";
 
 type Event = { id: string; application_id: string | null; kind: string; title: string; description: string | null; starts_at: string; ends_at: string; location_or_link: string | null; status: string; google_event_id: string | null; meta: { conflicts?: string[]; local_only?: boolean; sync_error?: string } };
@@ -49,10 +49,10 @@ export default function AgendaPage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      {e.location_or_link && <a href={e.location_or_link} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Link</Button></a>}
-                      {e.application_id && <Link href={`/candidaturas/${e.application_id}`}><Button size="sm" variant="ghost">Candidatura</Button></Link>}
+                      {e.location_or_link && <a href={e.location_or_link} target="_blank" rel="noreferrer" className={buttonVariants({ size: "sm", variant: "outline" })}>Link</a>}
+                      {e.application_id && <Link href={`/candidaturas/${e.application_id}`} className={buttonVariants({ size: "sm", variant: "ghost" })}>Candidatura</Link>}
                       {e.status === "draft" && <Button size="sm" onClick={() => confirm.mutate(e.id)}>Confirmar</Button>}
-                      <Button size="sm" variant="ghost" onClick={() => cancel.mutate(e.id)}>Cancelar</Button>
+                      <Button size="sm" variant="ghost" onClick={() => window.confirm("Cancelar este evento na sua agenda?") && cancel.mutate(e.id)}>Cancelar evento</Button>
                     </div>
                   </Card>
                 ))}

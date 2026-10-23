@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 
 from tracker.core import events, settings_store
-from tracker.integrations.claude.client import AIClient, AIRequest, get_ai, load_prompt
+from tracker.integrations.claude.client import AIClient, AIError, AIRequest, get_ai, load_prompt
 from tracker.modules.jobs.models import Job
 from tracker.modules.profile import service as profile_service
 from tracker.modules.profile.schemas import MasterProfile
@@ -222,8 +222,8 @@ async def generate_cover_letter(sm: SM, job_id: str, variant_id: str | None) -> 
         if report.passed:
             return res.output
         user += "\n\nCorrija sem inventar: " + "; ".join(v.text for v in report.violations)
-    assert res is not None
-    return res.output
+    # reprovada duas vezes: nada inventado entra em formulário nenhum
+    raise AIError("a carta gerada citou fatos que não estão no seu currículo; gere de novo ou escreva a sua")
 
 
 async def _cover_letter(sm: SM, task_run_id: str | None, job_id: str, variant_id: str | None = None) -> dict[str, Any]:

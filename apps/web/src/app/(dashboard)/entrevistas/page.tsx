@@ -55,7 +55,7 @@ function NewInterview() {
   const [open, setOpen] = useState(false);
   const { data: apps } = useGet<AppLite[]>(["applications", "lite"], open ? "/api/v1/applications?include_closed=false" : null);
   const [f, setF] = useState({ application_id: "", kind: "hr", starts_at: "", duration_min: 60, link: "" });
-  const create = useSend("POST", "/api/v1/interviews", { success: "Entrevista registrada: dossiê em preparação", invalidate: [["interviews"]] });
+  const create = useSend("POST", "/api/v1/interviews", { success: "Entrevista registrada: dossiê em preparação", invalidate: [["interviews"], ["calendar"], ["dashboard"], ["applications"]] });
   return (
     <>
       <Button onClick={() => setOpen(true)}>Registrar entrevista</Button>

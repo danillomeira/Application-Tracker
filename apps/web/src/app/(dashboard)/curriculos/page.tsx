@@ -104,7 +104,7 @@ function VariantPanel({ id }: { id: string }) {
   const { data: v } = useGet<VariantDetail>(["resumes", id], `/api/v1/resumes/variants/${id}`);
   const [json, setJson] = useState("");
   useEffect(() => { if (v) setJson(JSON.stringify(v.content, null, 2)); }, [v]);
-  const inv = { invalidate: [["resumes"]] };
+  const inv = { invalidate: [["resumes"], ["dashboard"]] };
   const approve = useSend("POST", `/api/v1/resumes/variants/${id}/approve`, { success: "Aprovado", ...inv });
   const update = useSend<Record<string, unknown>>("PUT", `/api/v1/resumes/variants/${id}`, { success: "Salvo e revalidado", ...inv });
   const render = useSend<void, { task_id: string }>("POST", `/api/v1/resumes/variants/${id}/render`);

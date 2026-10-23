@@ -11,7 +11,7 @@ Passo a passo para rodar o Application Tracker no seu computador (Windows, macOS
 - [5. Google: Gmail e Agenda](#google)
 - [6. Telegram](#telegram)
 - [7. Extensão do navegador](#extensao)
-- [8. Robô do LinkedIn (opcional, avançado)](#8-robô-do-linkedin-opcional-avançado)
+- [8. Vagas do LinkedIn](#8-vagas-do-linkedin)
 - [9. Problemas comuns](#9-problemas-comuns)
 
 ---
@@ -181,21 +181,38 @@ Ela nunca envia nada sozinha.
      ```
      e carregue `C:\Users\SEU_USUARIO\tracker-extension`. Quando a extensão for atualizada, repita o `cp` e clique em **↻ Recarregar** no card dela.
 3. Clique no ícone 🧩 e **fixe** o Application Tracker.
-4. Botão direito no ícone → **Opções**: endereço da API `http://localhost:8000` e o token. Salve.
+4. A página de **Opções** abre sozinha na primeira vez (ou botão direito no ícone → **Opções**): cole o token, confira o endereço da API (`http://localhost:8000`) e clique em **Testar conexão**. O token fica só neste navegador e nunca é mostrado às páginas que você visita.
+
+**Ligar, desligar e ajustar**
+
+| Onde | O que dá para fazer |
+|---|---|
+| Ícone da extensão (popup) | Ligar/desligar tudo · desligar só no site atual · **Pausar 1h** · ligar/desligar "Preencher sozinho" e "Anexar meu CV" · mostrar o painel, preencher de novo ou completar com IA · contadores do dia |
+| Painel na página | ⏸ desliga neste site · ⚙ opções · — minimiza · ✕ fecha nesta página · ↻ preencher de novo · ↶ desfazer o que o assistente preencheu · "Revisar preenchidos" mostra a origem de cada resposta (perfil, banco, IA, você) |
+| Opções | Tudo acima, mais: quando mostrar o painel (vagas e formulários, só formulários, só quando eu pedir), lado da tela, começar minimizado, contornos coloridos, sugestão 💡 ao clicar, avaliar vagas novas sozinho, registrar ao enviar, lista de sites ignorados |
+| Teclado | `Alt+Shift+P` painel · `Alt+Shift+F` preencher · `Alt+Shift+I` IA (troque em `chrome://extensions/shortcuts`) |
+
+**O que ela nunca faz:** clicar em enviar; ler ou preencher senhas, cartões, códigos de verificação, CPF/RG e campos de busca; mandar perguntas sensíveis para a IA; aprender com o que ela mesma preencheu (só com o que **você** digitou); agir em páginas que não são de vaga ou candidatura.
+
+API fora do seu PC (ex.: numa VPS)? Ao salvar outro endereço nas Opções, o navegador pede permissão para a extensão falar com ele.
 
 ---
 
-## 8. Robô do LinkedIn (opcional, avançado)
+## 8. Vagas do LinkedIn
 
-Faz o Easy Apply etapa por etapa na sua própria sessão, com ritmo humano e limites diários. O padrão é **revisão** (você aprova cada envio). O LinkedIn proíbe automação e o uso pode restringir a conta: leia `docs/12-seguranca-privacidade.md` antes.
+Sem robô e sem risco para a sua conta. Dois caminhos:
 
-```bash
-cd backend
-uv run playwright install chromium
-uv run tracker-agent login    # entre no LinkedIn na janela que abrir (uma vez)
-uv run tracker-agent check    # testa a conexão com a API
-uv run tracker-agent run      # processa a fila; o botão "Parar" no topo do dashboard interrompe em até 5 s
-```
+**Automático (recomendado): alertas de vaga pelo Gmail**
+1. No LinkedIn, em **Vagas**, faça a busca que quer acompanhar (cargo, local, remoto, Easy Apply…).
+2. Ligue **"Ativar alerta"** no topo dos resultados. Em **Gerenciar alertas**, frequência **diária** e notificação por **e-mail**.
+3. Com o Gmail conectado (seção 5), cada e-mail de alerta vira vagas na aba **Vagas**, com nota, e o e-mail ganha o marcador `Vagas/LinkedIn`.
+
+**Na hora: importar a busca da sua tela**
+1. Com a extensão instalada, abra uma busca de vagas no LinkedIn.
+2. No painel do assistente, clique em **"Importar para o tracker"**. Role a lista para carregar mais e importe de novo.
+3. Ao abrir uma vaga, a descrição completa entra sozinha e a nota é refeita.
+
+Para se candidatar (inclusive no Easy Apply), a extensão preenche o formulário; quem clica em enviar é você.
 
 ---
 
@@ -213,5 +230,6 @@ uv run tracker-agent run      # processa a fila; o botão "Parar" no topo do das
 | "localhost recusou a conexão" ao abrir um PDF | O app não estava rodando (API na 8000, dashboard na 3100). Confira os terminais do passo 3. |
 | Porta 5432/5433 ocupada | O compose usa a 5433. Se ela também estiver em uso, mude o mapeamento em `infra/docker-compose.yml` e a `DATABASE_URL` no `.env`. |
 | PDFs dos currículos não geram | Instale o `tectonic` (seção 1) e reinicie o worker. |
+| Vagas do LinkedIn não aparecem | Confira se o Gmail está conectado e se os alertas do LinkedIn chegam por e-mail; ou use "Importar para o tracker" na extensão. |
 | Extensão não aparece na página da vaga | Confira o token e o endereço da API nas Opções, se a API está rodando, e recarregue a página. Em WSL, confirme que copiou a versão mais nova (seção 7). |
 | Telegram não responde aos comandos | Só uma instância da API pode estar rodando; confira `TELEGRAM_BOT_TOKEN` e reinicie. |

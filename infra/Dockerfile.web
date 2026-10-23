@@ -17,4 +17,5 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app ./
 EXPOSE 3100
-CMD ["pnpm", "start"]
+# Dentro do container escuta em todas as interfaces; o compose publica só em 127.0.0.1.
+CMD ["pnpm", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3100"]

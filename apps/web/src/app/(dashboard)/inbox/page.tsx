@@ -2,9 +2,9 @@
 
 import { Inbox as InboxIcon } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Tabs, Textarea } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, Tabs, Textarea, Skeleton } from "@/components/ui";
 import { useGet, useSend } from "@/lib/hooks";
 import { EMAIL_LABEL } from "@/lib/labels";
 import { formatDateTime } from "@/lib/utils";
@@ -24,7 +24,6 @@ type Email = {
 };
 type Draft = { id: string; kind: string; application_id: string | null; to: string | null; subject: string | null; body: string; status: string; gmail_draft_id: string | null; created_at: string };
 type AppLite = { id: string; job_title: string; company_name: string };
-type LiMsg = { id: string; from: string; text: string; received_at: string; classification: string | null; application_id: string | null };
 
 export default function InboxPage() {
   return (
@@ -36,22 +35,24 @@ export default function InboxPage() {
 
 function Inbox() {
   const sp = useSearchParams();
-  const [tab, setTab] = useState<"emails" | "rascunhos" | "linkedin">(sp.get("tab") === "rascunhos" ? "rascunhos" : "emails");
+  const router = useRouter();
+  const pathname = usePathname();
+  const tab: "emails" | "rascunhos" = sp.get("tab") === "rascunhos" ? "rascunhos" : "emails";
+  const setTab = (v: "emails" | "rascunhos") => router.replace(`${pathname}?tab=${v}`, { scroll: false });
   const sync = useSend("POST", "/api/v1/inbox/sync", { success: "Sincronização do Gmail iniciada" });
   return (
     <div>
       <PageHeader icon={<InboxIcon size={20} />} title="Inbox" description="E-mails e mensagens classificados e ligados às candidaturas" actions={<Button variant="outline" onClick={() => sync.mutate(undefined)}>Sincronizar Gmail</Button>} />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "emails", label: "E-mails" }, { value: "rascunhos", label: "Rascunhos" }, { value: "linkedin", label: "LinkedIn" }]} />
+      <Tabs value={tab} onChange={setTab} items={[{ value: "emails", label: "E-mails" }, { value: "rascunhos", label: "Rascunhos" }]} />
       {tab === "emails" && <Emails />}
       {tab === "rascunhos" && <Drafts />}
-      {tab === "linkedin" && <LinkedIn />}
     </div>
   );
 }
 
 function Emails() {
   const [filter, setFilter] = useState("");
-  const { data } = useGet<Email[]>(["inbox", filter], `/api/v1/inbox${filter ? `?link_status=${filter}` : ""}`);
+  const { data, isLoading } = useGet<Email[]>(["inbox", filter], `/api/v1/inbox${filter ? `?link_status=${filter}` : ""}`);
   const { data: apps } = useGet<AppLite[]>(["applications", "lite"], "/api/v1/applications?include_closed=false");
   const link = useSend<{ id: string; application_id: string }>("POST", (v) => `/api/v1/inbox/${v.id}/link`, { success: "Associado", invalidate: [["inbox"], ["applications"]] });
   const reclass = useSend<{ id: string; label: string }>("POST", (v) => `/api/v1/inbox/${v.id}/reclassify`, { success: "Rótulo corrigido", invalidate: [["inbox"]] });
@@ -62,8 +63,14 @@ function Emails() {
         <option value="ambiguous">Precisam de associação</option>
         <option value="auto">Associados automaticamente</option>
       </Select>
-      {!data?.length ? (
-        <EmptyState title="Nenhum e-mail ainda">Conecte o Google em Configurações → Integrações.</EmptyState>
+      {isLoading ? (
+        <Skeleton className="h-40" />
+      ) : !data?.length ? (
+        filter ? (
+          <EmptyState title="Nada com esse filtro">Troque o filtro acima para ver os outros e-mails.</EmptyState>
+        ) : (
+          <EmptyState title="Nenhum e-mail ainda">Conecte o Google em Configurações → Integrações.</EmptyState>
+        )
       ) : (
         data.map((e) => (
           <Card key={e.id} className="space-y-1 text-sm">
@@ -125,8 +132,8 @@ function Drafts() {
               ) : (
                 <Button size="sm" onClick={() => push.mutate(d.id)}>Criar no Gmail</Button>
               )}
-              <Button size="sm" variant="success" onClick={() => sent.mutate(d.id)}>Enviei</Button>
-              <Button size="sm" variant="ghost" onClick={() => discard.mutate(d.id)}>Descartar</Button>
+              <Button size="sm" variant="success" onClick={() => sent.mutate(d.id)}>Já enviei este e-mail</Button>
+              <Button size="sm" variant="ghost" onClick={() => window.confirm("Descartar este rascunho?") && discard.mutate(d.id)}>Descartar</Button>
               {d.application_id && <Link className="self-center text-xs text-primary underline" href={`/candidaturas/${d.application_id}`}>candidatura</Link>}
             </div>
           </Card>
@@ -146,22 +153,3 @@ function Drafts() {
   );
 }
 
-function LinkedIn() {
-  const { data } = useGet<LiMsg[]>(["inbox", "linkedin"], "/api/v1/inbox/linkedin-messages");
-  return !data?.length ? (
-    <EmptyState title="Nenhuma mensagem lida ainda">O robô lê as conversas novas quando chega notificação do LinkedIn no Gmail.</EmptyState>
-  ) : (
-    <div className="space-y-2">
-      {data.map((m) => (
-        <Card key={m.id} className="text-sm">
-          <p className="font-medium">{m.from} <span className="text-xs text-muted-foreground">· {formatDateTime(m.received_at)}</span></p>
-          <p className="whitespace-pre-wrap">{m.text}</p>
-          <div className="mt-1 flex gap-2">
-            {m.classification && <Badge>{EMAIL_LABEL[m.classification] ?? m.classification}</Badge>}
-            {m.application_id && <Link className="text-xs text-primary underline" href={`/candidaturas/${m.application_id}`}>candidatura</Link>}
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}

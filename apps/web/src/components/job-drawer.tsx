@@ -19,17 +19,17 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { CompanyLogo, TechIcons } from "@/components/brand";
 import { formatSalary, type JobRow } from "@/components/job-card";
-import { Badge, Button, ScoreRing } from "@/components/ui";
+import { Badge, Button, ScoreRing, useDialog } from "@/components/ui";
 import { useGet, useSend } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE, SENIORITY_LABEL, STATUS_LABEL, WORK_MODEL_LABEL } from "@/lib/labels";
+import { isApplied } from "@/lib/job-actions";
 import { cn, formatDate, relativeTime } from "@/lib/utils";
 
 type Detail = JobRow & { description_text: string; benefits: string[] };
 
-const APPLIED = new Set(["submitted", "under_review", "interviewing", "assessment", "offer", "accepted", "rejected", "ghosted", "declined", "withdrawn"]);
 
 function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -45,11 +45,8 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
 }
 
 export function JobDrawer({ job, onClose }: { job: JobRow | null; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    if (job) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [job, onClose]);
+  const box = useRef<HTMLElement>(null);
+  useDialog(box, !!job, onClose);
   return (
     <AnimatePresence>
       {job && (
@@ -62,6 +59,9 @@ export function JobDrawer({ job, onClose }: { job: JobRow | null; onClose: () =>
             onClick={onClose}
           />
           <motion.aside
+            ref={box}
+            tabIndex={-1}
+            aria-modal="true"
             role="dialog"
             aria-label={`Vaga ${job.title}`}
             className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l bg-card shadow-2xl"
@@ -93,7 +93,7 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
   const link = j.apply_url || j.canonical_url;
   const s = j.score;
   const status = j.application_status;
-  const isApplied = !!status && APPLIED.has(status);
+  const done = isApplied(status);
   const salary = formatSalary(j.salary);
   const pos = [...(s?.explanation.chance?.positives ?? []), ...(s?.explanation.attractiveness?.positives ?? [])];
   const neg = [...(s?.explanation.knockout ?? []), ...(s?.explanation.chance?.negatives ?? []), ...(s?.explanation.attractiveness?.negatives ?? [])];
@@ -120,8 +120,8 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
 
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
         {/* Próximo passo: o bloco mais importante da tela */}
-        <div className={cn("rounded-2xl border p-4", isApplied ? "border-success/30 bg-success/5" : "border-primary/25 bg-accent/60")}>
-          {isApplied ? (
+        <div className={cn("rounded-2xl border p-4", done ? "border-success/30 bg-success/5" : "border-primary/25 bg-accent/60")}>
+          {done ? (
             <>
               <p className="flex items-center gap-2 font-semibold text-success"><Check size={17} /> Você já se candidatou</p>
               <p className="mt-1 text-sm text-muted-foreground">

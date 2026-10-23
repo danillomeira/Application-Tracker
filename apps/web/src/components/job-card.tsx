@@ -3,7 +3,9 @@
 import { Archive, ArrowRight, Ban, BarChart3, Check, Flame, Laptop, Layers, MapPin, Target, Wallet, X } from "lucide-react";
 import { CompanyLogo, TechIcons, Tooltip } from "@/components/brand";
 import { Card } from "@/components/ui";
+import { toast } from "sonner";
 import { useSend } from "@/lib/hooks";
+import { isApplied } from "@/lib/job-actions";
 import { QUADRANT_LABEL, QUADRANT_TONE, SENIORITY_LABEL, STATUS_LABEL, WORK_MODEL_LABEL } from "@/lib/labels";
 import { cn, relativeTime } from "@/lib/utils";
 
@@ -60,11 +62,13 @@ const QUADRANT_ICON: Record<string, React.ComponentType<{ size?: number }>> = { 
 
 /** Cartão enxuto da vaga: o essencial com ícones. Clicar abre o painel com detalhes e o próximo passo. */
 export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: JobRow) => void; onTech?: (tech: string) => void }) {
-  const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, { success: "Vaga descartada", invalidate: [["jobs"], ["dashboard"], ["facets"]] });
+  const inv = { invalidate: [["jobs"], ["dashboard"], ["facets"]] };
+  const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, inv);
+  const restore = useSend("POST", `/api/v1/jobs/${job.id}/restore`, { success: "Vaga de volta em Novas", ...inv });
   const s = job.score;
   const salary = formatSalary(job.salary);
   const QIcon = s ? QUADRANT_ICON[s.quadrant] ?? Target : null;
-  const applied = job.application_status && !["discovered", "queued", "skipped", "blocked"].includes(job.application_status);
+  const applied = isApplied(job.application_status);
   const open = () => onOpen?.(job);
   return (
     <Card
@@ -72,7 +76,7 @@ export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: J
       role="button"
       tabIndex={0}
       onClick={open}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open())}
+      onKeyDown={(e) => e.target === e.currentTarget && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open())}
       className="group flex h-full cursor-pointer flex-col gap-3"
       aria-label={`${job.title} na ${job.company_name}. Abrir detalhes`}
     >
@@ -105,9 +109,7 @@ export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: J
         {salary && <span className="inline-flex items-center gap-1 font-medium text-success"><Wallet size={13} /> {salary}</span>}
       </div>
 
-      <div onClick={(e) => onTech && e.stopPropagation()}>
-        <TechIcons techs={job.requirements?.must ?? []} max={7} />
-      </div>
+      <TechIcons techs={job.requirements?.must ?? []} max={7} onPick={onTech} />
 
       <div className="mt-auto flex items-center gap-2 border-t pt-3">
         {applied ? (
@@ -125,10 +127,14 @@ export function JobCard({ job, onOpen, onTech }: { job: JobRow; onOpen?: (job: J
             <button
               type="button"
               aria-label="Não tenho interesse"
+              disabled={skip.isPending}
               onClick={(e) => {
                 e.stopPropagation();
-                skip.mutate(undefined);
+                skip.mutate(undefined, {
+                  onSuccess: () => toast("Vaga descartada", { action: { label: "Desfazer", onClick: () => restore.mutate(undefined) } }),
+                });
               }}
+              onKeyDown={(e) => e.stopPropagation()}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
             >
               <X size={15} />

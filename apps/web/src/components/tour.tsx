@@ -10,8 +10,11 @@ import { TOURS } from "@/lib/tours";
 const VERSION = "v1";
 const EVENT = "tracker:tour";
 
+/** Tour só nas telas principais (/vagas, /candidaturas…); subpáginas como /vagas/123 não têm. */
 function pageKey(pathname: string) {
-  return pathname.split("/").filter(Boolean)[0] ?? "hoje";
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts.length > 1) return "";
+  return parts[0] ?? "hoje";
 }
 
 function seen(page: string) {
@@ -35,6 +38,7 @@ export function TourButton() {
   return (
     <button
       data-tour="help"
+      aria-label="Como usar esta tela"
       onClick={() => window.dispatchEvent(new CustomEvent(EVENT))}
       className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
     >
@@ -61,8 +65,16 @@ export function PageTour() {
   useEffect(() => {
     setI(null);
     if (!steps || seen(page)) return;
-    const t = setTimeout(() => setI(0), 900); // deixa a tela carregar antes
-    return () => clearTimeout(t);
+    // começa quando o primeiro item destacado já está na tela (listas carregam depois), ou após 6 s
+    const target = steps.find((s) => s.target)?.target;
+    const startedAt = Date.now();
+    const t = setInterval(() => {
+      if (!target || document.querySelector(`[data-tour="${target}"]`) || Date.now() - startedAt > 6000) {
+        clearInterval(t);
+        setI(0);
+      }
+    }, 300);
+    return () => clearInterval(t);
   }, [page, steps]);
 
   useEffect(() => {

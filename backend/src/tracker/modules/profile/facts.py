@@ -176,9 +176,29 @@ def numbers_in(text: str) -> set[str]:
     return out
 
 
+PLACEHOLDER = re.compile(r"confirmar|a confirmar|todo\b|preencher", re.I)
+
+
 def master_text(master: MasterProfile) -> str:
-    parts: list[str] = [master.model_dump_json()]
-    return " ".join(parts)
+    """Texto do mestre que vale como fonte de fatos: sem dados de contato (e-mail, telefone e links
+    não provam skill nem métrica) e sem marcadores "confirmar …" do importador."""
+    parts: list[str] = []
+
+    def walk(v: object) -> None:
+        if isinstance(v, str):
+            if not PLACEHOLDER.search(v):
+                parts.append(v)
+        elif isinstance(v, dict):
+            for x in v.values():  # pyright: ignore[reportUnknownVariableType]
+                walk(x)  # pyright: ignore[reportUnknownArgumentType]
+        elif isinstance(v, list):
+            for x in v:  # pyright: ignore[reportUnknownVariableType]
+                walk(x)  # pyright: ignore[reportUnknownArgumentType]
+        elif v is not None:
+            parts.append(str(v))
+
+    walk(master.model_dump(mode="json", exclude={"contact"}))
+    return " \n ".join(parts)
 
 
 def master_numbers(master: MasterProfile) -> set[str]:

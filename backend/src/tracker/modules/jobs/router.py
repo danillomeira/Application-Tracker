@@ -50,7 +50,7 @@ def _job_out(
 async def list_jobs(
     session: SessionDep,
     _user: CurrentUser,
-    quadrant: str | None = None,
+    quadrant: Annotated[list[str] | None, Query(description="um ou mais quadrantes")] = None,
     status: str = "open",
     triage: str | None = None,
     q: str | None = None,
@@ -69,8 +69,8 @@ async def list_jobs(
     posted_within_days: int | None = None,
     applied: bool | None = None,
     sort: str = "priority",
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ) -> list[JobOut]:
     stmt = (
         select(Job, Company, JobScore, Application)
@@ -81,7 +81,7 @@ async def list_jobs(
     if status != "all":
         stmt = stmt.where(Job.status == status)
     if quadrant:
-        stmt = stmt.where(JobScore.quadrant == quadrant)
+        stmt = stmt.where(JobScore.quadrant.in_(quadrant))
     if triage:
         stmt = stmt.where(Job.triage == triage)
     if company_id:
@@ -244,7 +244,7 @@ async def rescore_all(session: SessionDep, _user: CurrentUser) -> TaskAccepted:
 
 @router.post("/{job_id}/approve")
 async def approve(job_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
-    """Aprova a vaga: a candidatura entra na fila (Easy Apply) ou vira pacote (externa)."""
+    """Aprova a vaga: a candidatura entra na fila e o pacote (CV sob medida, respostas) é preparado."""
     job = await get_or_404(session, Job, job_id)
     score = await session.scalar(select(JobScore).where(JobScore.job_id == job.id, JobScore.is_current.is_(True)))
     app = await app_service.get_for_job(session, job.id) or await app_service.create_for_job(
@@ -272,20 +272,38 @@ async def skip(job_id: uuid.UUID, session: SessionDep, _user: CurrentUser, reaso
     return {"status": "skipped"}
 
 
+@router.post("/{job_id}/restore")
+async def restore(job_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> dict[str, Any]:
+    """Desfaz o "Não tenho interesse": a vaga volta para Novas."""
+    job = await get_or_404(session, Job, job_id)
+    job.triage = "new"
+    app = await app_service.get_for_job(session, job.id)
+    if app and app.status == "skipped":
+        await app_service.transition(session, app, "discovered", actor="user", reason="descarte desfeito")
+    await session.commit()
+    return {"status": "new"}
+
+
 # ---------- Buscas salvas ----------
 @searches_router.get("", response_model=list[SavedSearchOut])
 async def list_searches(session: SessionDep, _user: CurrentUser) -> list[SavedSearch]:
     return list((await session.scalars(select(SavedSearch).order_by(SavedSearch.name))).all())
 
 
-@searches_router.post("", response_model=SavedSearchOut, status_code=201)
-async def create_search(body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
+def _check_cron(expr: str) -> None:
+    from datetime import datetime
+
     from tracker.modules.jobs.tasks import cron_due
 
     try:
-        cron_due(body.schedule_cron, None, __import__("datetime").datetime.now())
+        cron_due(expr, None, datetime.now())
     except Exception as exc:
         raise HTTPException(422, f"cron inválido: {exc}") from exc
+
+
+@searches_router.post("", response_model=SavedSearchOut, status_code=201)
+async def create_search(body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
+    _check_cron(body.schedule_cron)
     row = SavedSearch(**body.model_dump())
     session.add(row)
     await session.commit()
@@ -295,6 +313,7 @@ async def create_search(body: SavedSearchIn, session: SessionDep, _user: Current
 @searches_router.put("/{search_id}", response_model=SavedSearchOut)
 async def update_search(search_id: uuid.UUID, body: SavedSearchIn, session: SessionDep, _user: CurrentUser) -> SavedSearch:
     row = await get_or_404(session, SavedSearch, search_id)
+    _check_cron(body.schedule_cron)
     for k, v in body.model_dump().items():
         setattr(row, k, v)
     await session.commit()

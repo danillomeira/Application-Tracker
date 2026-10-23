@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from tracker.api.deps import SessionDep
 from tracker.core import audit, events, settings_store
-from tracker.core.security import SESSION_COOKIE, CurrentUser, read_session
+from tracker.core.security import CSRF_HEADER, SESSION_COOKIE, CurrentUser, read_session
 from tracker.core.storage import get_storage
 from tracker.core.tasks import dispatch
 from tracker.integrations.claude.client import AIError, AIRequest, get_ai, load_prompt, sessionmaker_from
@@ -37,13 +37,17 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
 async def assistant_auth(request: Request, session: SessionDep, authorization: Annotated[str | None, Header()] = None) -> str:
-    if read_session(request.cookies.get(SESSION_COOKIE)):
-        return "session"
     if authorization and authorization.startswith("Extension "):
         cfg = await settings_store.get(session, "extension")
         digest = hashlib.sha256(authorization.removeprefix("Extension ").strip().encode()).hexdigest()
         if cfg.get("token_sha256") and hmac.compare_digest(digest, cfg["token_sha256"]):
             return "extension"
+        raise HTTPException(401, "token da extensão inválido")
+    # Cookie do dashboard: só do próprio dashboard (nunca de outra extensão) e com o header CSRF em escritas.
+    origin = request.headers.get("origin", "")
+    if read_session(request.cookies.get(SESSION_COOKIE)) and not origin.startswith(("chrome-extension://", "moz-extension://")):
+        if request.method in ("GET", "HEAD", "OPTIONS") or request.headers.get(CSRF_HEADER) == "1":
+            return "session"
     raise HTTPException(401, "token da extensão inválido")
 
 
@@ -240,14 +244,19 @@ def _transient_job(language: str) -> Job:
 @router.post("/fields")
 async def fields(body: FieldsIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
     """Resolve os campos do formulário da página (perfil → banco → regras → IA em lote)."""
+    out = await _resolve(body, session)
+    await session.commit()  # uso do banco de respostas (use_count/aliases) só conta quando preenche
+    return out
+
+
+async def _resolve(body: FieldsIn, session: SessionDep) -> dict[str, Any]:
     job = await session.get(Job, body.job_id) if body.job_id else await service.find_job(session, body.url)
     cover = None
     if job is not None:
         app = await app_service.get_for_job(session, job.id)
-        cover = app.cover_letter if app else (job.extra or {}).get("cover_letter", {}).get("text")
+        cover = app.cover_letter if app else (((job.extra or {}).get("cover_letter") or {}).get("text"))
     target = job or _transient_job(body.language or "pt")
     res, ai = await resolve_core(session, body.fields, target, cover, allow_ai=body.allow_ai)
-    await session.commit()
     return {
         "values": {r.key: {"value": r.value, "source": r.resolution, "confidence": r.confidence} for r in res.values},
         "suggestions": {
@@ -272,7 +281,8 @@ class SuggestIn(BaseModel):
 @router.post("/suggest")
 async def suggest(body: SuggestIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
     """Sugestão para um campo clicado. IA só se `allow_ai` (botão "✨ IA" na extensão)."""
-    out = await fields(FieldsIn(url=body.url, job_id=body.job_id, fields=[body.field], allow_ai=body.allow_ai), session, _a)
+    out = await _resolve(FieldsIn(url=body.url, job_id=body.job_id, fields=[body.field], allow_ai=body.allow_ai), session)
+    await session.rollback()  # só olhar a sugestão não altera o banco de respostas
     key = body.field.key
     if key in out["values"]:
         return {"key": key, **out["values"][key], "sensitive": False}
@@ -287,6 +297,8 @@ class LearnItem(BaseModel):
     field_kind: str = "text"
     options: list[str] = Field(default_factory=list)
     language: str = "any"
+    # quem deu a resposta: user (você digitou), profile/bank/rule (assistente), ai (IA). Só "user" vira aprendizado.
+    source: str = Field(default="user", pattern="^(user|profile|bank|rule|ai)$")
 
 
 class LearnIn(BaseModel):
@@ -330,11 +342,13 @@ class SubmittedIn(BaseModel):
     company: str | None = None
     job_title: str | None = None
     answers: list[LearnItem] = Field(default_factory=list)
+    render_id: uuid.UUID | None = None  # PDF que a extensão anexou (snapshot do que foi enviado, regra 6)
 
 
 @router.post("/submitted")
 async def submitted(body: SubmittedIn, session: SessionDep, _a: Auth) -> dict[str, Any]:
     """Você enviou a candidatura no site: registra no acompanhamento (com o que foi respondido)."""
+    new_job: uuid.UUID | None = None
     job = await session.get(Job, body.job_id) if body.job_id else await service.find_job(session, body.url)
     if job is None and body.job_title:
         job = await service.find_job_same_site(session, body.url, body.job_title)
@@ -355,10 +369,12 @@ async def submitted(body: SubmittedIn, session: SessionDep, _a: Auth) -> dict[st
         )
         job.language = detect_language(body.text) if body.text else job.language
         await session.flush()
-        dispatch("ai.process_job", job_id=str(job.id))
+        new_job = job.id
     app = await service.ensure_application(session, job)
     already = app.submitted_at is not None
     if not already:
+        if body.render_id and app.resume_render_id is None and await session.get(ResumeRender, body.render_id):
+            app.resume_render_id = body.render_id
         await app_service.register_submission(session, app, actor="user", channel="assisted")
         for i, a in enumerate(body.answers):
             if a.value in (None, "", []):
@@ -371,8 +387,8 @@ async def submitted(body: SubmittedIn, session: SessionDep, _a: Auth) -> dict[st
                     field_kind=a.field_kind,
                     options=a.options,
                     answer={"value": a.value},
-                    resolution="user",
-                    confidence=1.0,
+                    resolution=a.source,
+                    confidence=1.0 if a.source == "user" else 0.9,
                     locked=True,
                 )
             )
@@ -383,8 +399,11 @@ async def submitted(body: SubmittedIn, session: SessionDep, _a: Auth) -> dict[st
             telegram_too=False,
         )
     await session.commit()
-    if body.answers:
-        await learn(LearnIn(items=body.answers), session, _a)
+    if new_job is not None:
+        dispatch("ai.process_job", job_id=str(new_job))
+    mine = [a for a in body.answers if a.source == "user"]
+    if mine and not already:
+        await learn(LearnIn(items=mine), session, _a)
     await events.apublish("applications", "application.updated", {"application_id": str(app.id), "to": app.status})
     return {"application_id": str(app.id), "status": app.status, "already": already, "job_id": str(job.id)}
 
@@ -419,7 +438,8 @@ async def resume_for_job(session: SessionDep, _a: Auth, job_id: uuid.UUID | None
         headers={
             "content-disposition": f'attachment; filename="{render.filename}"',
             "x-filename": render.filename,
-            "access-control-expose-headers": "x-filename",
+            "x-render-id": str(render.id),
+            "access-control-expose-headers": "x-filename, x-render-id",
         },
     )
 

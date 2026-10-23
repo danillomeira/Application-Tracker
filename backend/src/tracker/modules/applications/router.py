@@ -184,7 +184,10 @@ async def get_application(app_id: uuid.UUID, session: SessionDep, _user: Current
 @router.patch("/{app_id}", response_model=ApplicationOut)
 async def patch_application(app_id: uuid.UUID, body: ApplicationPatch, session: SessionDep, _user: CurrentUser) -> ApplicationOut:
     app = await get_or_404(session, Application, app_id)
-    if body.status and body.status != app.status:
+    if body.status == "submitted" and app.submitted_at is None:
+        # arrastar para "Candidatadas" = registrar o envio (snapshot da vaga, data, prioridade)
+        await service.register_submission(session, app, actor="user", channel=None)
+    elif body.status and body.status != app.status:
         try:
             await service.transition(session, app, body.status, actor="user", reason=body.reason)
         except state_machine.InvalidTransition as exc:
@@ -228,6 +231,7 @@ async def mark_submitted(app_id: uuid.UUID, session: SessionDep, _user: CurrentU
 @router.post("/manual", response_model=ApplicationOut, status_code=201)
 async def manual(body: ManualApplicationIn, session: SessionDep, _user: CurrentUser) -> ApplicationOut:
     """Registra candidatura feita manualmente (para vaga existente ou nova)."""
+    new_job: uuid.UUID | None = None
     if body.job_id:
         job = await get_or_404(session, Job, body.job_id)
     else:
@@ -246,7 +250,7 @@ async def manual(body: ManualApplicationIn, session: SessionDep, _user: CurrentU
                 apply_url=body.url,
             ),
         )
-        dispatch("ai.process_job", job_id=str(job.id))
+        new_job = job.id
     app = await service.get_for_job(session, job.id) or await service.create_for_job(
         session, job, channel=body.channel, mode="manual", actor="user"
     )
@@ -259,6 +263,8 @@ async def manual(body: ManualApplicationIn, session: SessionDep, _user: CurrentU
         app.notes = body.notes
     await service.register_submission(session, app, actor="user", channel=body.channel, submitted_at=body.submitted_at)
     await session.commit()
+    if new_job is not None:
+        dispatch("ai.process_job", job_id=str(new_job))  # depois do commit: o worker já enxerga a vaga
     row = (await session.execute(_base_stmt().where(Application.id == app.id))).first()
     assert row is not None
     return _out(*row)

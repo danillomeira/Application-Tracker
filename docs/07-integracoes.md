@@ -1,5 +1,7 @@
 # 07 · Integrações
 
+> **Nota (F10, ADR-020):** o robô local (`tracker-agent`, Playwright) foi removido. Trechos que citam robô, agente local, Easy Apply automático ou kill switch são históricos. A candidatura é feita pelo usuário com o assistente do navegador ([09](09-motor-candidatura.md)); vagas do LinkedIn chegam por alertas no Gmail e pela importação na extensão.
+
 Toda integração implementa uma interface em `integrations/<nome>/` com uma implementação real e uma fake (testes). Falhas são registradas no painel de saúde (RF-PLA-05).
 
 ## 1. Google (Gmail + Calendar)

@@ -222,11 +222,11 @@ export function Select({ value, defaultValue, onChange, children, className, dis
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={open && filtered[active] ? `${listId}-${active}` : undefined}
         aria-label={rest["aria-label"]}
         disabled={disabled}
         value={open ? query : (selected?.label ?? "")}
         placeholder={open ? (selected?.label || "Digite para buscar…") : (placeholder ?? "Selecione…")}
-        onFocus={show}
         onClick={() => !open && show()}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -246,7 +246,12 @@ export function Select({ value, defaultValue, onChange, children, className, dis
           } else if (e.key === "Enter" && open) {
             e.preventDefault();
             if (filtered[active]) choose(filtered[active]);
-          } else if (e.key === "Escape" || e.key === "Tab") {
+          } else if (e.key === "Escape" && open) {
+            // fecha só a lista, não o modal/gaveta em volta
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen(false);
+          } else if (e.key === "Tab") {
             setOpen(false);
           }
         }}
@@ -266,8 +271,8 @@ export function Select({ value, defaultValue, onChange, children, className, dis
             role="listbox"
             className="fixed z-[70] max-h-64 overflow-y-auto rounded-xl border bg-card p-1 shadow-[var(--shadow-lift)]"
             style={{
-              left: rect.left,
-              width: Math.max(rect.width, 200),
+              left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 200) - 8)),
+              width: Math.min(Math.max(rect.width, 200), window.innerWidth - 16),
               ...(below ? { top: rect.bottom + 4 } : { bottom: window.innerHeight - rect.top + 4 }),
             }}
           >
@@ -275,6 +280,7 @@ export function Select({ value, defaultValue, onChange, children, className, dis
             {filtered.map((o, idx) => (
               <li
                 key={`${o.value}-${idx}`}
+                id={`${listId}-${idx}`}
                 data-idx={idx}
                 role="option"
                 aria-selected={o.value === current}
@@ -557,13 +563,60 @@ export function StaggerItem({ className, children, ...props }: HTMLMotionProps<"
   return (
     <motion.div
       className={className}
-      layout
       variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: EASE } } }}
       {...props}
     >
       {children}
     </motion.div>
   );
+}
+
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+/** Diálogos acessíveis: foco entra no diálogo, Tab fica preso nele, Esc fecha, o foco volta ao botão que abriu e a página atrás não rola. */
+export function useDialog(ref: React.RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+  React.useEffect(() => {
+    if (!open) return;
+    const before = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const t = window.setTimeout(() => {
+      const el = ref.current;
+      const first = el?.querySelector<HTMLElement>("[data-autofocus]") ?? el?.querySelector<HTMLElement>(FOCUSABLE);
+      (first ?? el)?.focus({ preventScroll: true });
+    }, 30);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !ref.current) return;
+      const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0]!, last = items[items.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!ref.current.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+      if (before?.isConnected) before.focus({ preventScroll: true });
+    };
+  }, [open, ref]);
 }
 
 export function Modal({
@@ -579,11 +632,8 @@ export function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  const box = React.useRef<HTMLDivElement>(null);
+  useDialog(box, open, onClose);
   return (
     <AnimatePresence>
       {open && (
@@ -596,6 +646,8 @@ export function Modal({
           transition={{ duration: 0.18 }}
         >
           <motion.div
+            ref={box}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label={title}

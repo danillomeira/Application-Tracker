@@ -1,5 +1,7 @@
 # 16 · Riscos
 
+> **Nota (F10, ADR-020):** o robô local (`tracker-agent`, Playwright) foi removido. Trechos que citam robô, agente local, Easy Apply automático ou kill switch são históricos. A candidatura é feita pelo usuário com o assistente do navegador ([09](09-motor-candidatura.md)); vagas do LinkedIn chegam por alertas no Gmail e pela importação na extensão.
+
 | # | Risco | Prob. | Impacto | Mitigação |
 |---|---|---|---|---|
 | R1 | Restrição ou banimento da conta do LinkedIn | Média | **Crítico** | Modo revisão padrão; limites baixos; ritmo humano; sessão real; parada em qualquer sinal com pausa de 72 h; aceite explícito; F1–F4 entregam valor sem automação |

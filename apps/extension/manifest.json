@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Application Tracker — Assistente",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Avalia a vaga enquanto você navega, preenche formulários sozinho com seu perfil e CV, completa perguntas abertas com IA e registra suas candidaturas.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "alarms"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -20,6 +22,7 @@
         "https://*/*"
       ],
       "js": [
+        "defaults.js",
         "content.js"
       ],
       "run_at": "document_idle",
@@ -28,7 +31,42 @@
   ],
   "action": {
     "default_title": "Application Tracker",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Mostrar/ocultar o assistente"
+    },
+    "fill-form": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Preencher o formulário"
+    },
+    "ai-fill": {
+      "suggested_key": {
+        "default": "Alt+Shift+I"
+      },
+      "description": "Completar com IA"
+    }
+  },
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "minimum_chrome_version": "116"
 }

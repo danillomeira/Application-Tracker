@@ -215,3 +215,38 @@ async def test_github_import(client: AsyncClient, session) -> None:
         assert any(p["id"] == "etl-kit" for p in master["data"]["projects"]) and master["version"] == 2
     finally:
         insights_router._gh_transport = None
+
+
+async def test_ai_answers_respect_question_intent(session, ai) -> None:
+    """Pergunta condicional que não vale para você e pedido de matrícula nunca viram um texto de apresentação."""
+    from tracker.modules.applications.resolver import resolve_core
+
+    await factories.seed_master(session)
+    job = await factories.job(session, title="Pessoa Desenvolvedora Backend Python")
+    seen: dict[str, str] = {}
+
+    def answer(req):
+        seen["system"] = req.system
+        seen["user"] = req.user
+        return {
+            "answers": [
+                {"key": "m", "value": "Na MyBroker, projetei uma plataforma…", "confidence": 0.95},
+                {"key": "g", "value": "Sou desenvolvedor backend Python…", "confidence": 0.85},
+                {"key": "x", "value": "", "confidence": 0.0},
+            ]
+        }
+
+    ai.on("apply.answer", answer)
+    fields = [
+        FormField(key="m", label="5. Caso você seja colaborador do GB, informe a sua matrícula.", kind="textarea"),
+        FormField(key="g", label="Caso você já tenha trabalhado conosco, conte como foi", kind="textarea"),
+        FormField(key="x", label="Quem indicou você?", kind="text"),
+    ]
+    res, usable = await resolve_core(session, fields, job, allow_ai=True)
+    filled = {r.key for r in res.values}
+    assert "m" not in filled  # matrícula: só você responde (nem vai para a IA)
+    assert 'key="m"' not in seen["user"]
+    assert "g" not in filled  # condicional com confiança < 0,9: fica como sugestão para você revisar
+    assert "x" not in filled and "x" not in usable  # vazio = não se aplica
+    assert "Desenvolvedor" in seen["system"] and "condicional" in seen["system"].lower()  # prompt v3 em uso
+    assert "Pessoa Desenvolvedora Backend Python" in seen["user"]

@@ -319,6 +319,11 @@ async def deterministic(
     return "unresolved"
 
 
+CONDITIONAL = re.compile(
+    r"^(?:\d+\W*\s*)?(?:caso|se)\b.{0,40}\b(?:voce|vc)?\s*(?:seja|for|tenha|ja|trabalh|possu)|^(?:\d+\W*\s*)?if you (?:are|have|were|currently)"
+)
+
+
 class BatchItem(BaseModel):
     key: str
     value: str
@@ -341,14 +346,15 @@ async def ai_batch(session: AsyncSession, fields: list[FormField], master: Maste
         for f in fields
     )
     user = (
-        f"<job>Vaga: {job.title or 'n/d'} · Idioma: {job.language} · Requisitos: {job.requirements or {}}</job>\n{qs}\n"
+        f"<job>Vaga: {job.title or 'n/d'} · Senioridade: {job.seniority or 'n/d'} · Idioma: {job.language} · "
+        f"Requisitos: {job.requirements or {}}</job>\n{qs}\n"
         "Responda cada pergunta pelo `key`."
     )
     try:
         res = await get_ai(sessionmaker_from(session)).structured(
             AIRequest(
                 task="apply.answer",
-                system=load_prompt("apply.answer"),
+                system=load_prompt("apply.answer", "v3"),
                 context="<profile>\n" + master.model_dump_json(exclude_none=True) + "\n</profile>",
                 user=user,
                 effort="low",
@@ -356,7 +362,7 @@ async def ai_batch(session: AsyncSession, fields: list[FormField], master: Maste
                 entity_type="job",
                 entity_id=job.id,
                 cache_ttl_days=60,  # mesma pergunta + mesma vaga = sem nova chamada
-                prompt_version="v2",
+                prompt_version="v3",
             ),
             BatchAnswers,
         )
@@ -400,10 +406,18 @@ async def resolve_core(
     for f in unresolved:
         a = answers.get(f.key)
         v = _ai_value(f, a) if a else None
+        if v is not None and not str(v).strip():
+            v = None  # a IA disse que não se aplica ou que o dado não está no perfil: fica para você
         ok_text = v is not None and (f.kind not in ("text", "textarea") or validate_free_text(str(v), master).passed)
         if a and ok_text:
             usable[f.key] = a
-        if a and ok_text and a.confidence >= float(cfg["min_confidence"]):
+        # pergunta condicional ("Caso você seja…"): só preenche sozinho com certeza alta
+        need = (
+            max(float(cfg["min_confidence"]), 0.9)
+            if CONDITIONAL.search(normalize_text(f.label))
+            else float(cfg["min_confidence"])
+        )
+        if a and ok_text and a.confidence >= need:
             out.values.append(Resolved(f.key, v, "ai", a.confidence))
             continue
         out.pending.append(f.model_copy())

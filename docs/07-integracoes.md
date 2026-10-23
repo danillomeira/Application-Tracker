@@ -41,7 +41,7 @@ Autorização incremental: login primeiro; Gmail e Calendar quando o usuário co
 | Função | Como |
 |---|---|
 | Login | Manual pelo usuário no navegador com a extensão instalada; a extensão reutiliza a sessão normal do LinkedIn |
-| Busca de vagas | Agenda configurável em **Vagas → Descobrir**; a extensão verifica buscas devidas e abre uma aba em segundo plano. País e modalidade remota são filtros separados |
+| Busca de vagas | Agenda configurável em **Vagas → Buscar vagas**; a extensão verifica buscas devidas e abre uma aba em segundo plano. País e modalidade remota são filtros separados |
 | Detalhe da vaga | Descrição, nº de candidatos, data, recrutador ("Conheça a equipe de contratação"), tipo de candidatura |
 | Candidaturas | A descoberta não envia candidaturas; vagas encontradas aparecem como sugestões em Vagas para revisão manual |
 | Mensagens | Somente leitura das conversas novas, disparada por notificação no Gmail |

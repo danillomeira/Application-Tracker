@@ -308,8 +308,11 @@ async def delete_search(search_id: uuid.UUID, session: SessionDep, _user: Curren
     return Response(status_code=204)
 
 
-@searches_router.post("/{search_id}/run", status_code=202)
-async def run_search(search_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> dict[str, str]:
-    await get_or_404(session, SavedSearch, search_id)
-    dispatch("ingest.run_saved_search", search_id=str(search_id))
-    return {"status": "queued"}
+@searches_router.post("/{search_id}/run", response_model=TaskAccepted, status_code=202)
+async def run_search(search_id: uuid.UUID, session: SessionDep, _user: CurrentUser) -> TaskAccepted:
+    search = await get_or_404(session, SavedSearch, search_id)
+    if "linkedin" in search.sources:
+        search.last_linkedin_run_at = None
+        await session.commit()
+    task = await enqueue(session, "ingest.run_saved_search", search_id=str(search_id))
+    return TaskAccepted(task_id=task.id)

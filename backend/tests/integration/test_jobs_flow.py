@@ -7,10 +7,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from tracker.modules.agent_gateway.models import AgentJob
 
 from tests import factories
 from tracker.integrations.claude.client import FakeAIClient
-from tracker.modules.agent_gateway.models import AgentJob
 from tracker.modules.applications.models import Application, ApplicationEvent, PendingQuestion
 from tracker.modules.applications.tasks import mark_ghosted, prepare
 from tracker.modules.jobs import service as job_service

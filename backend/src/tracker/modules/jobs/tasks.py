@@ -279,7 +279,10 @@ async def run_saved_search(sm: SM, search_id: str) -> dict[str, Any]:
                 continue
             try:
                 raws = relevance.filter_relevant(
-                    await fetch(query), terms, brazilian_company=False, search_in_description=True
+                    await fetch(query),
+                    terms,
+                    brazilian_company=None if filters.get("country") else False,
+                    search_in_description=True,
                 )
                 raws = [raw for raw in raws if matches_saved_search_filters(raw, filters)]
             except (httpx.HTTPError, ValueError) as exc:
@@ -296,9 +299,11 @@ async def run_saved_search(sm: SM, search_id: str) -> dict[str, Any]:
     return result
 
 
-@celery_app.task(name="ingest.run_saved_search")
-def run_saved_search_task(search_id: str) -> dict[str, Any]:
-    return run(lambda sm: run_saved_search(sm, search_id))
+async def _run_saved_search_task(sm: SM, task_run_id: str | None, search_id: str) -> dict[str, Any]:
+    return await run_saved_search(sm, search_id)
+
+
+celery_app.task(name="ingest.run_saved_search")(tracked("ingest.run_saved_search")(_run_saved_search_task))
 
 
 @celery_app.task(name="ingest.run_due_saved_searches")

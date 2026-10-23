@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
+from datetime import UTC, datetime
 
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -46,6 +48,32 @@ async def test_linkedin_discovery_claims_scheduled_search_once(anon_client: Asyn
     assert first.json()[0]["id"] == str(search.id)
     assert "location=United+States" in first.json()[0]["url"]
     assert second.json() == []
+
+
+async def test_run_saved_search_returns_trackable_task_and_requeues_linkedin(
+    client: AsyncClient, session, dispatched
+) -> None:
+    search = SavedSearch(
+        name="Backend US",
+        query="backend Go",
+        filters={"country": "United States", "work_models": ["remote"]},
+        sources=["boards", "linkedin"],
+        schedule_cron="0 9 * * 1-5",
+        is_active=True,
+        last_linkedin_run_at=datetime.now(UTC),
+    )
+    session.add(search)
+    await session.commit()
+
+    response = await client.post(f"/api/v1/saved-searches/{search.id}/run")
+
+    assert response.status_code == 202
+    assert uuid.UUID(response.json()["task_id"])
+    await session.refresh(search)
+    assert search.last_linkedin_run_at is None
+    assert dispatched[-1][0] == "ingest.run_saved_search"
+    assert dispatched[-1][1]["search_id"] == str(search.id)
+    assert "task_run_id" in dispatched[-1][1]
 
 
 async def _auth(session) -> None:

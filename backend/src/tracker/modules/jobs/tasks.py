@@ -278,8 +278,12 @@ async def run_saved_search(sm: SM, search_id: str) -> dict[str, Any]:
             if fetch is None:
                 continue
             try:
+                raws_by_id: dict[tuple[str, str], nz.RawJob] = {}
+                for search_query in relevance.search_variants(query):
+                    for raw in await fetch(search_query):
+                        raws_by_id[(raw.source, raw.external_id)] = raw
                 raws = relevance.filter_relevant(
-                    await fetch(query),
+                    list(raws_by_id.values()),
                     terms,
                     brazilian_company=None if filters.get("country") else False,
                     search_in_description=True,

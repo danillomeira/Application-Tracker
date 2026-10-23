@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from tracker.modules.jobs.normalize import RawJob, normalize_title
-from tracker.modules.jobs.relevance import filter_relevant, location_ok, matches
+from tracker.modules.jobs.relevance import filter_relevant, location_ok, matches, search_variants
 from tracker.modules.jobs.tasks import matches_saved_search_filters
 
 TERMS = [normalize_title(t) for t in ["data engineer", "engenheiro de dados", "backend", "software engineer", "machine learning"]]
@@ -88,6 +88,25 @@ def test_saved_search_can_match_keywords_in_description() -> None:
     go = [normalize_title("Go")]
     assert not filter_relevant([raw], go)
     assert filter_relevant([raw], go, search_in_description=True) == [raw]
+
+
+def test_go_keyword_matches_language_alias_and_board_tags_without_substring_noise() -> None:
+    assert matches("Go Engineer", ["go"])
+    assert matches("Golang Backend Developer", ["go"])
+    assert matches("Go Engineer", ["golang"])
+    assert not matches("Google Cloud Engineer", ["go"])
+    assert search_variants("go") == ["go", "Golang"]
+    assert search_variants("Golang") == ["Golang", "Go"]
+    assert search_variants("backend Go") == ["backend Go"]
+
+    tagged = RawJob(
+        source="remoteok",
+        external_id="2",
+        title="Backend Engineer",
+        company_name="X",
+        raw={"tags": ["Golang", "Backend"]},
+    )
+    assert filter_relevant([tagged], ["go"], search_in_description=True) == [tagged]
 
 
 def test_saved_search_filters_country_alias_and_work_model() -> None:

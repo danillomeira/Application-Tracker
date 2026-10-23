@@ -9,7 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import Text, and_, case, func, select
+from sqlalchemy import Text, and_, case, exists, func, select
 
 from tracker.api.deps import SessionDep, TaskAccepted, get_or_404
 from tracker.core import audit
@@ -88,7 +88,10 @@ async def list_jobs(
         stmt = stmt.where(Job.company_id == company_id)
     if q:
         like = f"%{q}%"
-        stmt = stmt.where(Job.title.ilike(like) | Company.name.ilike(like) | Job.description_text.ilike(like))
+        source_match = exists(
+            select(JobSource.id).where(JobSource.job_id == Job.id, JobSource.raw.cast(Text).ilike(like))
+        )
+        stmt = stmt.where(Job.title.ilike(like) | Company.name.ilike(like) | Job.description_text.ilike(like) | source_match)
     if company:
         stmt = stmt.where(Job.company_id.in_(company))
     for t in tech or []:  # cada tecnologia precisa aparecer nos requisitos ou na descrição

@@ -13489,6 +13489,28 @@
       "type": "boolean",
       "title": "Linkedin Risk Accepted",
       "default": false
+     },
+     "birth_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Birth Date"
+     },
+     "birthplace": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Birthplace"
      }
     },
     "additionalProperties": true,

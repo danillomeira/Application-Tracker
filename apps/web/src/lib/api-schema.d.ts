@@ -4663,6 +4663,10 @@ export interface components {
              * @default false
              */
             linkedin_risk_accepted: boolean;
+            /** Birth Date */
+            birth_date?: string | null;
+            /** Birthplace */
+            birthplace?: string | null;
         } & {
             [key: string]: unknown;
         };

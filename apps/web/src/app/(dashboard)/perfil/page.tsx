@@ -182,6 +182,12 @@ function PrefsTab() {
       <Field label="Mínimo PJ (R$/mês)"><Input type="number" value={money("min_salary", "PJ")} onChange={(e) => setMoney("min_salary", "PJ", e.target.value)} /></Field>
       <Field label="Setores preferidos"><TagInput value={list("sectors_preferred")} onChange={(v) => setList("sectors_preferred", v)} placeholder="Digite e tecle Enter" /></Field>
       <Field label="Setores evitados"><TagInput value={list("sectors_avoided")} onChange={(v) => setList("sectors_avoided", v)} placeholder="Digite e tecle Enter" /></Field>
+      <Field label="Data de nascimento" hint="só para formulários que pedem; nunca vai para a IA">
+        <Input placeholder="dd/mm/aaaa" value={String(p.birth_date ?? "")} onChange={(e) => setP({ ...p, birth_date: e.target.value || null })} />
+      </Field>
+      <Field label="Cidade e estado de nascimento" hint="ex.: Brasília, DF">
+        <Input placeholder="Cidade, UF" value={String(p.birthplace ?? "")} onChange={(e) => setP({ ...p, birthplace: e.target.value || null })} />
+      </Field>
       <Field label="Aviso prévio (dias)"><Input type="number" value={String(p.notice_period_days ?? 30)} onChange={(e) => setP({ ...p, notice_period_days: Number(e.target.value) })} /></Field>
       <div className="flex flex-col gap-2 text-sm">
         <label className="flex gap-2"><input type="checkbox" checked={!!p.relocation} onChange={(e) => setP({ ...p, relocation: e.target.checked })} /> Aceito mudar de cidade</label>

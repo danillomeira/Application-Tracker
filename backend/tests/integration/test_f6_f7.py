@@ -250,3 +250,35 @@ async def test_ai_answers_respect_question_intent(session, ai) -> None:
     assert "x" not in filled and "x" not in usable  # vazio = não se aplica
     assert "Desenvolvedor" in seen["system"] and "condicional" in seen["system"].lower()  # prompt v3 em uso
     assert "Pessoa Desenvolvedora Backend Python" in seen["user"]
+
+
+async def test_salary_experience_and_birth_rules(session) -> None:
+    """Pretensão já respondida vale para "expectativa salarial"; tempo de experiência na área; nascimento do perfil."""
+    from tracker.modules.applications.resolver import resolve_core
+    from tracker.modules.profile import service as profile_service
+    from tracker.modules.profile.models import AnswerBankEntry
+
+    await factories.seed_master(session)
+    session.add(
+        AnswerBankEntry(
+            canonical_question="Pretensão salarial", field_kind="text", answer={"value": "12000"}, source="user", sensitive=True
+        )
+    )
+    prefs = await profile_service.get_preferences(session)
+    await profile_service.put_preferences(session, prefs.model_copy(update={"birthplace": "Brasília, DF"}))
+    job = await factories.job(session, language="pt")
+    await session.flush()
+    fields = [
+        FormField(key="s", label="1. Qual sua expectativa salarial (para o modelo CLT)?", kind="textarea", required=True),
+        FormField(
+            key="y", label="3. Qual é o seu tempo de experiência CLT na área de tecnologia?", kind="textarea", required=True
+        ),
+        FormField(key="b", label="4. Qual é a sua cidade e estado de nascimento?", kind="textarea", required=True),
+        FormField(key="d", label="Data de nascimento", kind="text"),
+    ]
+    res, _ = await resolve_core(session, fields, job, allow_ai=False)
+    vals = {r.key: r.value for r in res.values}
+    assert vals["s"] == "12000"
+    assert vals["y"].endswith("anos") and int(vals["y"].split()[0]) >= 1
+    assert vals["b"] == "Brasília, DF"
+    assert "d" not in vals and "d" in {f.key for f in res.pending}  # sem cadastro: fica para você (nunca para a IA)

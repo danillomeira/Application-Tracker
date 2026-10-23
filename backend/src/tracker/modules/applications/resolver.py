@@ -142,7 +142,7 @@ YEARS_RE = re.compile(
 )
 SKILL_AFTER = re.compile(r"(?:with|in|using|com|em|de|no|na)\s+([A-Za-z0-9#+./ \-]{1,40}?)\s*(?:\?|$|\(|,)", re.I)
 LANG_RE = re.compile(r"(english|ingl[eê]s|portugu[eê]s|portuguese|spanish|espanhol)", re.I)
-SALARY_RE = re.compile(r"(salary|salário|salario|pretens|remunera|compensation|expected pay|ctc)", re.I)
+SALARY_RE = re.compile(r"(salary|sal[aá]ri|salarial|pretens|remunera|compensation|expected pay|\bctc\b|faixa salarial)", re.I)
 NOTICE_RE = re.compile(
     r"(notice period|aviso pr[eé]vio|when can you start|start date|disponibilidade para in[ií]cio|quando pode come[cç]ar)",
     re.I,
@@ -160,12 +160,22 @@ COVER_RE = re.compile(
 )
 
 
+# "experiência na área de tecnologia", "em TI", "CLT", "profissional": tempo total, não uma skill
+GENERIC_AREA = {"work", "professional", "experience", "experiencia", "total", "tecnologia", "technology", "tech", "ti", "it",
+                "area", "software", "desenvolvimento", "development", "programacao", "programming", "clt", "mercado",
+                "industry", "field", "carreira", "career", "profissional"}  # fmt: skip
+BIRTHPLACE_RE = re.compile(
+    r"(cidade|estado|local|city|place|uf).{0,30}(nasc|birth)|naturalidade|(nasc|birth).{0,20}(cidade|local|city|place)"
+)
+BIRTHDATE_RE = re.compile(r"data de nascimento|date of birth|birth ?date|\bdob\b|nascido em|quando voce nasceu")
+
+
 def _years_answer(label: str, master: MasterProfile) -> tuple[int, str | None] | None:
     if not YEARS_RE.search(label):
         return None
     m = SKILL_AFTER.search(label)
     skill = m.group(1).strip() if m else None
-    if skill and normalize_text(skill) in ("work", "professional", "experience", "experiencia", "total"):
+    if skill and set(normalize_text(skill).split()) & GENERIC_AREA:
         skill = None
     if skill:
         years = facts.years_for_skill(master, skill)
@@ -181,6 +191,12 @@ async def _rules(
     label = f.label
     y = _years_answer(label, master)
     if y is not None:
+        if f.kind in ("text", "textarea") and not y[1]:
+            return (
+                f"{y[0]} anos"
+                if job.language == "pt" or re.search(r"[ãçéê]|anos|experi[eê]ncia", label, re.I)
+                else f"{y[0]} years"
+            ), None
         return y[0], y[1]
     if LANG_RE.search(label) and re.search(r"(level|n[ií]vel|proficien|fluen|speak|fala)", label, re.I):
         lang = LANG_RE.search(label).group(1).lower()  # type: ignore[union-attr]
@@ -227,6 +243,19 @@ async def bank_lookup(session: AsyncSession, f: FormField, job: Job) -> tuple[An
     for e in rows:
         if cond_ok(e) and (norm_q(e.canonical_question) == q or q in {norm_q(a) for a in e.aliases or []}):
             return e, 1.0
+    if SALARY_RE.search(f.label):
+        # pretensão que você já respondeu antes ("Pretensão salarial" = "Qual sua expectativa salarial?"), no mesmo regime
+        lab = normalize_text(f.label)
+        want = "pj" if re.search(r"\bpj\b", lab) else "clt" if re.search(r"\bclt\b", lab) else (regime or "").lower()
+        cands = [e for e in rows if cond_ok(e) and SALARY_RE.search(e.canonical_question) and e.source == "user"]
+
+        def reg(e: AnswerBankEntry) -> str:
+            qn = normalize_text(e.canonical_question)
+            return "pj" if re.search(r"\bpj\b", qn) else "clt" if re.search(r"\bclt\b", qn) else ""
+
+        same = [e for e in cands if reg(e) == want] or [e for e in cands if not reg(e)]
+        if same:
+            return max(same, key=lambda e: e.updated_at), 0.95
     emb = embed_one(f.label)
     best: tuple[AnswerBankEntry, float] | None = None
     for e in rows:
@@ -281,6 +310,14 @@ async def deterministic(
         if v is not None:
             out.values.append(Resolved(f.key, v, "user"))
             return "resolved"
+    # nascimento: só do seu perfil (Perfil → Preferências); sem cadastro, fica para você
+    if BIRTHPLACE_RE.search(label_n) or BIRTHDATE_RE.search(label_n):
+        pv = prefs.birthplace if BIRTHPLACE_RE.search(label_n) else prefs.birth_date
+        v = _finalize(f, pv) if pv else None
+        if v is not None:
+            out.values.append(Resolved(f.key, v, "profile"))
+            return "resolved"
+        return "sensitive"
     pkind = next((k for pat, k in PROFILE_PATTERNS if re.search(pat, label_n)), None)
     if pkind and f.kind not in ("radio", "checkbox"):
         pv = profile_value(pkind, master)

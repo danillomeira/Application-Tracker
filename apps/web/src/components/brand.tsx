@@ -42,28 +42,45 @@ export function Tooltip({ label, children, side = "top" }: { label: string; chil
   );
 }
 
-function TechBadge({ name, size }: { name: string; size: number }) {
+function TechBadge({ name, size, onPick }: { name: string; size: number; onPick?: (tech: string) => void }) {
   const [failed, setFailed] = useState(false);
   const src = techIcon(name);
+  // com onPick vira botão (filtra por essa tecnologia); sem, é só um rótulo com foco para o tooltip
+  const Tag = onPick ? "button" : "span";
+  const props = {
+    title: onPick ? `Filtrar por ${name}` : name,
+    "aria-label": onPick ? `Filtrar por ${name}` : name,
+    tabIndex: 0,
+    ...(onPick
+      ? {
+          type: "button" as const,
+          onClick: (e: React.MouseEvent) => {
+            e.stopPropagation();
+            onPick(name);
+          },
+          onKeyDown: (e: React.KeyboardEvent) => e.stopPropagation(),
+        }
+      : {}),
+  };
   if (!src || failed) {
     return (
-      <span className="inline-flex h-7 items-center rounded-lg border bg-card px-2 text-[11px] font-medium text-muted-foreground" title={name}>
+      <Tag {...props} className="inline-flex h-7 items-center rounded-lg border bg-card px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
         {name}
-      </span>
+      </Tag>
     );
   }
   return (
     <Tooltip label={name}>
-      <span className="grid place-items-center rounded-lg border bg-card p-1 shadow-sm" style={{ width: size + 10, height: size + 10 }}>
+      <Tag {...props} className="grid place-items-center rounded-lg border bg-card p-1 shadow-sm transition-colors hover:border-primary/40" style={{ width: size + 10, height: size + 10 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={name} width={size} height={size} loading="lazy" onError={() => setFailed(true)} />
-      </span>
+        <img src={src} alt="" width={size} height={size} loading="lazy" onError={() => setFailed(true)} />
+      </Tag>
     </Tooltip>
   );
 }
 
 /** Tecnologias como ícones (nome no tooltip). Com ícone primeiro; o resto vira "+N". */
-export function TechIcons({ techs, max = 6, size = 18 }: { techs: string[]; max?: number; size?: number }) {
+export function TechIcons({ techs, max = 6, size = 18, onPick }: { techs: string[]; max?: number; size?: number; onPick?: (tech: string) => void }) {
   const uniq = [...new Set(techs.map((t) => t.trim()).filter((t) => t && t.length <= 30))];
   const withIcon = uniq.filter((t) => techIcon(t));
   const ordered = [...withIcon, ...uniq.filter((t) => !techIcon(t))];
@@ -73,7 +90,7 @@ export function TechIcons({ techs, max = 6, size = 18 }: { techs: string[]; max?
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {shown.map((t) => (
-        <TechBadge key={t} name={t} size={size} />
+        <TechBadge key={t} name={t} size={size} onPick={onPick} />
       ))}
       {rest > 0 && (
         <Tooltip label={ordered.slice(max).join(", ")}>

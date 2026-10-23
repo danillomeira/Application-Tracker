@@ -181,7 +181,13 @@ async def gupy(subdomain: str, company_name: str, transport: httpx.AsyncBaseTran
     for j in jobs:
         jid = str(j.get("id"))
         url = f"https://{subdomain}.gupy.io/jobs/{jid}"
-        wm = {"remote": "remote", "hybrid": "hybrid", "on-site": "onsite"}.get(str(j.get("workplaceType", "")).lower())
+        wp_raw = j.get("workplace")
+        wp: dict[str, Any] = wp_raw if isinstance(wp_raw, dict) else {}
+        addr_raw = wp.get("address")
+        addr: dict[str, Any] = addr_raw if isinstance(addr_raw, dict) else {}
+        wtype = str(j.get("workplaceType") or wp.get("workplaceType") or "").lower()
+        wm = {"remote": "remote", "hybrid": "hybrid", "on-site": "onsite", "onsite": "onsite", "presencial": "onsite"}.get(wtype)
+        city, state = j.get("city") or addr.get("city"), j.get("state") or addr.get("stateShortName") or addr.get("state")
         out.append(
             RawJob(
                 source="gupy",
@@ -189,7 +195,7 @@ async def gupy(subdomain: str, company_name: str, transport: httpx.AsyncBaseTran
                 title=j.get("title") or j.get("name") or "",
                 company_name=company_name,
                 url=url,
-                location=", ".join(filter(None, [j.get("city"), j.get("state")])) or None,
+                location=", ".join(filter(None, [city, state])) or None,
                 description_text=html_to_text(j.get("description") or ""),
                 posted_at=_dt_ms(j.get("publishedDate")),
                 apply_url=url,
@@ -456,7 +462,7 @@ async def board_arbeitnow(query: str, transport: httpx.AsyncBaseTransport | None
             location=j.get("location"),
             description_html=j.get("description"),
             description_text=html_to_text(j.get("description") or ""),
-            posted_at=_dt_ms((j.get("created_at") or 0) * 1000),
+            posted_at=_dt_ms(j["created_at"] * 1000) if j.get("created_at") else None,
             apply_url=j["url"],
             apply_kind="external",
             work_model="remote" if j.get("remote") else None,

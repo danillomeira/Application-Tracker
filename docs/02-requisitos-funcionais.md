@@ -1,5 +1,7 @@
 # 02 · Requisitos funcionais
 
+> **Nota (F10, ADR-020):** o robô local (`tracker-agent`, Playwright) foi removido. Trechos que citam robô, agente local, Easy Apply automático ou kill switch são históricos. A candidatura é feita pelo usuário com o assistente do navegador ([09](09-motor-candidatura.md)); vagas do LinkedIn chegam por alertas no Gmail e pela importação na extensão.
+
 Formato: **ID**, descrição, **Prioridade** (M = obrigatório, S = importante, C = desejável), **Fase** do roadmap e **Aceite** (critérios verificáveis).
 
 Prefixos: `PER` perfil · `CV` currículos · `VAG` vagas · `AVA` avaliação · `CAN` candidatura Easy Apply · `EXT` candidatura externa · `ACO` acompanhamento · `AGE` agenda · `ENT` entrevista · `OFE` oferta · `REL` relacionamento · `NOT` notificações · `DSH` dashboard · `ANA` aprendizado · `PLA` plataforma.

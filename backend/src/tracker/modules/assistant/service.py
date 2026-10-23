@@ -19,6 +19,7 @@ from tracker.modules.applications.models import Application
 from tracker.modules.companies.models import Company
 from tracker.modules.jobs.models import Job, JobSource
 from tracker.modules.jobs.normalize import detect_apply_kind
+from tracker.modules.resumes.models import ResumeRender, ResumeVariant
 from tracker.modules.scoring.models import JobScore
 from tracker.modules.scoring.service import company_profile, responsiveness
 
@@ -211,6 +212,33 @@ async def job_card(session: AsyncSession, job: Job) -> dict[str, Any]:
         }
         if app
         else None,
+        "tailored": await tailored_info(session, job),
+    }
+
+
+async def tailored_variant(session: AsyncSession, job: Job) -> ResumeVariant | None:
+    """CV sob medida mais recente desta vaga (não arquivado)."""
+    return await session.scalar(
+        select(ResumeVariant)
+        .where(ResumeVariant.job_id == job.id, ResumeVariant.kind == "tailored", ResumeVariant.status != "archived")
+        .order_by(ResumeVariant.created_at.desc())
+        .limit(1)
+    )
+
+
+async def tailored_info(session: AsyncSession, job: Job) -> dict[str, Any] | None:
+    v = await tailored_variant(session, job)
+    if v is None:
+        return None
+    render = await session.scalar(
+        select(ResumeRender).where(ResumeRender.variant_id == v.id).order_by(ResumeRender.rendered_at.desc()).limit(1)
+    )
+    return {
+        "variant_id": str(v.id),
+        "status": v.status,
+        "passed": bool((v.validation or {}).get("passed")),
+        "has_pdf": render is not None,
+        "filename": render.filename if render else None,
     }
 
 

@@ -75,13 +75,10 @@ export function fromParams(sp: URLSearchParams): Filters {
   return f;
 }
 
-/** Filtros → query string (para a URL e para a API). A API aceita um quadrante; vários viram filtro local. */
+/** Filtros → query string (para a URL e para a API). */
 export function toParams(f: Filters, forApi = false): URLSearchParams {
   const sp = new URLSearchParams();
-  for (const k of LISTS) {
-    if (forApi && k === "quadrant") continue;
-    f[k].forEach((v) => sp.append(k, v));
-  }
+  for (const k of LISTS) f[k].forEach((v) => sp.append(k, v));
   for (const k of NUMS) if (f[k] != null) sp.set(k, String(f[k]));
   if (f.q) sp.set("q", f.q);
   if (f.location) sp.set("location", f.location);
@@ -89,7 +86,6 @@ export function toParams(f: Filters, forApi = false): URLSearchParams {
   if (f.sort !== EMPTY.sort || forApi) sp.set("sort", f.sort);
   if (f.with_salary) sp.set("with_salary", "true");
   if (f.applied) sp.set("applied", f.applied);
-  if (forApi && f.quadrant.length === 1) sp.set("quadrant", f.quadrant[0]);
   return sp;
 }
 
@@ -100,9 +96,8 @@ export function activeCount(f: Filters) {
     (f.q ? 1 : 0) +
     (f.location ? 1 : 0) +
     (f.with_salary ? 1 : 0) +
-    (f.applied ? 1 : 0) +
-    (f.triage !== EMPTY.triage ? 1 : 0)
-  );
+    (f.applied ? 1 : 0)
+  ); // a triagem tem seletor próprio ao lado da busca: não conta como filtro escondido
 }
 
 function toggle(list: string[], v: string) {

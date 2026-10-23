@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Senior Full Stack Developer (Python + Vue.js) - Globex</title>
+<style>.opts{border:1px solid #ccc}.opts div{padding:4px;cursor:pointer}</style></head>
+<body>
+<h1>Senior Full Stack Developer (Python + Vue.js) - Remote - Latin America</h1>
+<h2>Requirements</h2><p>Python, Vue, TypeScript, PostgreSQL. Responsibilities: build features.</p>
+<form id="apply">
+  <div class="field"><div class="lbl">First Name*</div><div class="wrap"><input id="a1" placeholder="Enter"></div></div>
+  <div class="field"><div class="lbl">Last Name*</div><div class="wrap"><input id="a2" placeholder="Enter"></div></div>
+  <div class="field"><div class="lbl">Email*</div><div class="wrap"><input id="a3" placeholder="Enter"></div></div>
+  <div class="field"><div class="lbl">Resume/CV*</div><input id="a4" type="file"><span>Accepted file types: PDF, DOC, DOCX</span></div>
+  <div class="field"><div class="lbl">LinkedIn URL*</div><div class="wrap"><input id="a5" placeholder="Enter"></div><p>Keep in mind that a good LinkedIn profile will match your CV/resume</p></div>
+  <div class="field"><div class="lbl">Phone*</div><div class="wrap"><input id="a6" placeholder="Enter"></div></div>
+  <div class="field"><div class="lbl">How many years of IT Professional Experience do you have?*</div>
+    <div class="wrap"><div class="select__control"><div class="select__placeholder">Search</div><input id="c1" role="combobox" aria-autocomplete="list" aria-expanded="false"></div>
+    <div class="opts" id="o1" hidden role="listbox"><div role="option">0-2 years</div><div role="option">3-4 years</div><div role="option">5-7 years</div><div role="option">8+ years</div></div></div></div>
+  <div class="field"><div class="lbl">What is your level of English?*</div>
+    <div class="opt"><input type="radio" name="eng" id="e0"><span>I don't know English at all</span></div>
+    <div class="opt"><input type="radio" name="eng" id="e1"><span>Basic</span></div>
+    <div class="opt"><input type="radio" name="eng" id="e2"><span>Intermediate (intermediate reading and writing)</span></div>
+    <div class="opt"><input type="radio" name="eng" id="e3"><span>Intermediate + (I can have a fluid conversation in English)</span></div>
+    <div class="opt"><input type="radio" name="eng" id="e4"><span>Advanced</span></div>
+    <div class="opt"><input type="radio" name="eng" id="e5"><span>Native</span></div>
+  </div>
+  <div class="field"><div class="lbl">Which FullStack team member referred you?</div><div class="wrap"><input id="a7" placeholder="Enter"></div></div>
+</form>
+<script>
+  const c1 = document.getElementById('c1'), o1 = document.getElementById('o1');
+  c1.addEventListener('input', () => { o1.hidden = false; });
+  c1.addEventListener('focus', () => { o1.hidden = false; });
+  o1.querySelectorAll('[role=option]').forEach((o) => o.addEventListener('click', () => {
+    c1.value = ''; o1.hidden = true; c1.parentElement.querySelector('.select__placeholder').textContent = o.textContent;
+    c1.parentElement.querySelector('.select__placeholder').className = 'select__single-value'; window.picked = o.textContent;
+  }));
+</script>
+</body></html>

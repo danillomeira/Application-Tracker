@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tracker.core import settings_store
+from tracker.core.humanize import humanize
 from tracker.integrations.claude.client import AIError, AIRequest, get_ai, load_prompt, sessionmaker_from
 from tracker.integrations.embeddings import cosine, embed_one, normalize_text
 from tracker.modules.applications.models import Application, ApplicationAnswer, PendingQuestion
@@ -143,7 +144,7 @@ YEARS_RE = re.compile(
 )
 SKILL_AFTER = re.compile(r"(?:with|in|using|com|em|de|no|na)\s+([A-Za-z0-9#+./ \-]{1,40}?)\s*(?:\?|$|\(|,)", re.I)
 LANG_RE = re.compile(r"(english|ingl[eê]s|portugu[eê]s|portuguese|spanish|espanhol)", re.I)
-SALARY_RE = re.compile(r"(salary|salário|salario|pretens|remunera|compensation|expected pay|ctc)", re.I)
+SALARY_RE = re.compile(r"(salary|sal[aá]ri|salarial|pretens|remunera|compensation|expected pay|\bctc\b|faixa salarial)", re.I)
 NOTICE_RE = re.compile(
     r"(notice period|aviso pr[eé]vio|when can you start|start date|disponibilidade para in[ií]cio|quando pode come[cç]ar)",
     re.I,
@@ -161,12 +162,22 @@ COVER_RE = re.compile(
 )
 
 
+# "experiência na área de tecnologia", "em TI", "CLT", "profissional": tempo total, não uma skill
+GENERIC_AREA = {"work", "professional", "experience", "experiencia", "total", "tecnologia", "technology", "tech", "ti", "it",
+                "area", "software", "desenvolvimento", "development", "programacao", "programming", "clt", "mercado",
+                "industry", "field", "carreira", "career", "profissional"}  # fmt: skip
+BIRTHPLACE_RE = re.compile(
+    r"(cidade|estado|local|city|place|uf).{0,30}(nasc|birth)|naturalidade|(nasc|birth).{0,20}(cidade|local|city|place)"
+)
+BIRTHDATE_RE = re.compile(r"data de nascimento|date of birth|birth ?date|\bdob\b|nascido em|quando voce nasceu")
+
+
 def _years_answer(label: str, master: MasterProfile) -> tuple[int, str | None] | None:
     if not YEARS_RE.search(label):
         return None
     m = SKILL_AFTER.search(label)
     skill = m.group(1).strip() if m else None
-    if skill and normalize_text(skill) in ("work", "professional", "experience", "experiencia", "total"):
+    if skill and set(normalize_text(skill).split()) & GENERIC_AREA:
         skill = None
     if skill:
         years = facts.years_for_skill(master, skill)
@@ -182,6 +193,12 @@ async def _rules(
     label = f.label
     y = _years_answer(label, master)
     if y is not None:
+        if f.kind in ("text", "textarea") and not y[1]:
+            return (
+                f"{y[0]} anos"
+                if job.language == "pt" or re.search(r"[ãçéê]|anos|experi[eê]ncia", label, re.I)
+                else f"{y[0]} years"
+            ), None
         return y[0], y[1]
     if LANG_RE.search(label) and re.search(r"(level|n[ií]vel|proficien|fluen|speak|fala)", label, re.I):
         lang = LANG_RE.search(label).group(1).lower()  # type: ignore[union-attr]
@@ -228,6 +245,19 @@ async def bank_lookup(session: AsyncSession, f: FormField, job: Job) -> tuple[An
     for e in rows:
         if cond_ok(e) and (norm_q(e.canonical_question) == q or q in {norm_q(a) for a in e.aliases or []}):
             return e, 1.0
+    if SALARY_RE.search(f.label):
+        # pretensão que você já respondeu antes ("Pretensão salarial" = "Qual sua expectativa salarial?"), no mesmo regime
+        lab = normalize_text(f.label)
+        want = "pj" if re.search(r"\bpj\b", lab) else "clt" if re.search(r"\bclt\b", lab) else (regime or "").lower()
+        cands = [e for e in rows if cond_ok(e) and SALARY_RE.search(e.canonical_question) and e.source == "user"]
+
+        def reg(e: AnswerBankEntry) -> str:
+            qn = normalize_text(e.canonical_question)
+            return "pj" if re.search(r"\bpj\b", qn) else "clt" if re.search(r"\bclt\b", qn) else ""
+
+        same = [e for e in cands if reg(e) == want] or [e for e in cands if not reg(e)]
+        if same:
+            return max(same, key=lambda e: e.updated_at), 0.95
     emb = embed_one(f.label)
     best: tuple[AnswerBankEntry, float] | None = None
     for e in rows:
@@ -282,6 +312,14 @@ async def deterministic(
         if v is not None:
             out.values.append(Resolved(f.key, v, "user"))
             return "resolved"
+    # nascimento: só do seu perfil (Perfil → Preferências); sem cadastro, fica para você
+    if BIRTHPLACE_RE.search(label_n) or BIRTHDATE_RE.search(label_n):
+        pv = prefs.birthplace if BIRTHPLACE_RE.search(label_n) else prefs.birth_date
+        v = _finalize(f, pv) if pv else None
+        if v is not None:
+            out.values.append(Resolved(f.key, v, "profile"))
+            return "resolved"
+        return "sensitive"
     pkind = next((k for pat, k in PROFILE_PATTERNS if re.search(pat, label_n)), None)
     if pkind and f.kind not in ("radio", "checkbox"):
         pv = profile_value(pkind, master)
@@ -320,6 +358,12 @@ async def deterministic(
     return "unresolved"
 
 
+CONDITIONAL = re.compile(
+    r"^(?:\d+\W*\s*)?(?:caso|se)\b.{0,40}\b(?:voce|vc)?\s*(?:seja|for|tenha|ja|trabalh|possu)"
+    r"|^(?:\d+\W*\s*)?if you (?:are|have|were|currently)"
+)
+
+
 class BatchItem(BaseModel):
     key: str
     value: str
@@ -342,14 +386,15 @@ async def ai_batch(session: AsyncSession, fields: list[FormField], master: Maste
         for f in fields
     )
     user = (
-        f"<job>Vaga: {job.title or 'n/d'} · Idioma: {job.language} · Requisitos: {job.requirements or {}}</job>\n{qs}\n"
+        f"<job>Vaga: {job.title or 'n/d'} · Senioridade: {job.seniority or 'n/d'} · Idioma: {job.language} · "
+        f"Requisitos: {job.requirements or {}}</job>\n{qs}\n"
         "Responda cada pergunta pelo `key`."
     )
     try:
         res = await get_ai(sessionmaker_from(session)).structured(
             AIRequest(
                 task="apply.answer",
-                system=load_prompt("apply.answer"),
+                system=load_prompt("apply.answer", "v3"),
                 context="<profile>\n" + master.model_dump_json(exclude_none=True) + "\n</profile>",
                 user=user,
                 effort="low",
@@ -357,7 +402,7 @@ async def ai_batch(session: AsyncSession, fields: list[FormField], master: Maste
                 entity_type="job",
                 entity_id=job.id,
                 cache_ttl_days=60,  # mesma pergunta + mesma vaga = sem nova chamada
-                prompt_version="v2",
+                prompt_version="v3",
             ),
             BatchAnswers,
         )
@@ -370,6 +415,85 @@ async def ai_batch(session: AsyncSession, fields: list[FormField], master: Maste
 def _ai_value(f: FormField, a: BatchItem) -> Any | None:
     value: Any = f.options[a.option_index] if a.option_index is not None and 0 <= a.option_index < len(f.options) else a.value
     return _finalize(f, value)
+
+
+# ---------- "Qual é o seu atual ou último trabalho?" (Empresa, Posição, De, Até, trabalho atual) ----------
+COMPANY_LBL = re.compile(r"^(nome da )?(empresa|company|employer|empregador|organizacao|organization)( atual| name)?$")
+POSITION_LBL = re.compile(r"^(posicao|cargo|position|job title|title|funcao|role|cargo atual)$")
+FROM_LBL = re.compile(r"^(de|from|desde|inicio|data de inicio|start|start date|data inicial|mes de inicio)$")
+TO_LBL = re.compile(r"^(ate|to|fim|termino|data de (fim|saida|termino)|end|end date|data final)$")
+CURRENT_LBL = re.compile(
+    r"(este e o meu trabalho atual|trabalho aqui atualmente|emprego atual|current (job|position|role)"
+    r"|i currently work|currently work here)"
+)
+FIRST_JOB_RE = re.compile(
+    r"(primeiro (emprego|trabalho)|first (job|paid job|employment)).{0,40}(ano|year)"
+    r"|(ano|year).{0,40}(primeiro (emprego|trabalho)|first job)"
+)
+
+
+def _clean(label: str) -> str:
+    return normalize_text(re.sub(r"[*:]+\s*$", "", label)).strip()
+
+
+def current_job(master: MasterProfile) -> Any | None:
+    jobs = [e for e in master.experience if e.type == "employment" and e.start]
+    if not jobs:
+        return None
+    return max(jobs, key=lambda e: ((e.end is None), facts.parse_month(e.end) or facts.parse_month(e.start)))
+
+
+def _title_for(exp: Any, job: Job) -> str:
+    """Cargo do mestre (ou alternativa) que mais se parece com o da vaga."""
+    opts = [exp.title, *(exp.title_alternatives or [])]
+    words = set(normalize_text(job.title or "").split())
+    return max(opts, key=lambda o: len(set(normalize_text(o).split()) & words)) if words else exp.title
+
+
+def _date_value(value: str | None, kind: str) -> str | None:
+    d = facts.parse_month(value)
+    if d is None:
+        return None
+    if kind == "date":
+        return f"01/{d.month:02d}/{d.year}"
+    if kind == "month":
+        return f"{d.year}-{d.month:02d}"
+    if kind == "number":
+        return str(d.year)
+    return f"{d.month:02d}/{d.year}"
+
+
+def job_history(fields: list[FormField], master: MasterProfile, job: Job) -> tuple[dict[str, Any], set[str]]:
+    """Valores do bloco de emprego atual e campos que ficam vazios de propósito (ex.: "Até" do emprego atual)."""
+    values: dict[str, Any] = {}
+    leave_empty: set[str] = set()
+    starts = [d for e in master.experience if e.type in facts.PROFESSIONAL_TYPES and (d := facts.parse_month(e.start))]
+    for f in fields:
+        if FIRST_JOB_RE.search(normalize_text(f.label)) and starts and f.kind not in ("radio", "checkbox"):
+            values[f.key] = str(min(starts).year)
+    if not any(COMPANY_LBL.match(_clean(f.label)) for f in fields):
+        return values, leave_empty
+    exp = current_job(master)
+    if exp is None:
+        return values, leave_empty
+    is_current = exp.end is None
+    for f in fields:
+        lab = _clean(f.label)
+        if COMPANY_LBL.match(lab) and f.kind in ("text", "typeahead"):
+            values[f.key] = exp.organization_short or exp.organization
+        elif POSITION_LBL.match(lab) and f.kind in ("text", "typeahead"):
+            values[f.key] = _title_for(exp, job)
+        elif FROM_LBL.match(lab):
+            if (v := _date_value(exp.start, f.kind)) is not None:
+                values[f.key] = v
+        elif TO_LBL.match(lab):
+            if is_current:
+                leave_empty.add(f.key)
+            elif (v := _date_value(exp.end, f.kind)) is not None:
+                values[f.key] = v
+        elif f.kind == "checkbox" and CURRENT_LBL.search(lab):
+            values[f.key] = is_current
+    return values, leave_empty
 
 
 async def resolve_core(
@@ -387,7 +511,15 @@ async def resolve_core(
     out = Resolution()
     user_answers = user_answers or {}
     unresolved: list[FormField] = []
+    history, leave_empty = job_history(fields, master, job)
     for f in fields:
+        if f.key in history:
+            v = _finalize(f, history[f.key])
+            if v is not None:
+                out.values.append(Resolved(f.key, v, "profile"))
+                continue
+        if f.key in leave_empty:
+            continue  # "Até" do emprego atual: fica vazio de propósito (nem você nem a IA precisam preencher)
         state = await deterministic(session, f, master, prefs, job, cover_letter, user_answers, out)
         if state == "sensitive":
             out.pending.append(f)
@@ -397,18 +529,30 @@ async def resolve_core(
             else:
                 unresolved.append(f)
     answers = await ai_batch(session, unresolved, master, job) if allow_ai else {}
+    usable: dict[str, BatchItem] = {}  # só respostas que passaram no validador de fatos viram sugestão (regra 2)
     for f in unresolved:
         a = answers.get(f.key)
         v = _ai_value(f, a) if a else None
+        if v is not None and f.kind in ("text", "textarea"):
+            v = humanize(str(v))
+            if a is not None:
+                a = a.model_copy(update={"value": v})
+        if v is not None and not str(v).strip():
+            v = None  # a IA disse que não se aplica ou que o dado não está no perfil: fica para você
         ok_text = v is not None and (f.kind not in ("text", "textarea") or validate_free_text(str(v), master).passed)
-        if a and ok_text and a.confidence >= float(cfg["min_confidence"]):
+        if a and ok_text:
+            usable[f.key] = a
+        # pergunta condicional ("Caso você seja…"): só preenche sozinho com certeza alta
+        need = (
+            max(float(cfg["min_confidence"]), 0.9)
+            if CONDITIONAL.search(normalize_text(f.label))
+            else float(cfg["min_confidence"])
+        )
+        if a and ok_text and a.confidence >= need:
             out.values.append(Resolved(f.key, v, "ai", a.confidence))
             continue
-        pending = f.model_copy()
-        if a:
-            pending.current_value = a.value
-        out.pending.append(pending)
-    return out, answers
+        out.pending.append(f.model_copy())
+    return out, usable
 
 
 async def resolve_fields(

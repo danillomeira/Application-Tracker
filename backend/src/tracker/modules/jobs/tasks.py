@@ -142,6 +142,11 @@ async def poll_company(sm: SM, company_id: str) -> dict[str, Any]:
                 .where(Job.company_id == c.id, JobSource.source == ats)
             )
         ).all()
+        # fonte voltou vazia mas tínhamos várias abertas: provável falha/mudança da página, não fecha nada
+        open_count = sum(1 for _, job in srcs if job.status == "open")
+        if not raws and open_count >= 3:
+            result["suspicious_empty"] = True
+            srcs = []
         for src, job in srcs:
             if src.external_id not in ext_ids and job.status == "open":
                 job.status = "closed"

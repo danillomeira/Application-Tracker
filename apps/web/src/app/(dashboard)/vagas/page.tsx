@@ -5,7 +5,7 @@ import { Ban, Briefcase, Check, ChevronLeft, ChevronRight, Clock3, Eye, Globe2, 
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { JobCard, type JobRow } from "@/components/job-card";
 import { JobDrawer } from "@/components/job-drawer";
 import {
@@ -24,6 +24,7 @@ import {
   StaggerItem,
   Tabs,
   Textarea,
+  useDialog,
 } from "@/components/ui";
 import { ActiveFilters, EMPTY, FilterPanel, activeCount, fromParams, toParams, type Facets, type Filters } from "./job-filters";
 import { toast } from "sonner";
@@ -560,23 +561,29 @@ function JobsList() {
   const sp = useSearchParams();
   const activeView = sp.get("view");
   const [f, setF] = useState<Filters>(() => fromParams(new URLSearchParams(sp.toString())));
+  // voltar/avançar do navegador muda a URL: os filtros acompanham
+  const spKey = sp.toString();
+  useEffect(() => {
+    const fromUrl = fromParams(new URLSearchParams(spKey));
+    setF((cur) => (toParams(cur).toString() === toParams(fromUrl).toString() ? cur : fromUrl));
+  }, [spKey]);
   const [limit, setLimit] = useState(PAGE);
   const [drawer, setDrawer] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useDialog(drawerRef, drawer, () => setDrawer(false));
   const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const debounced = useDebounced(f);
   useEffect(() => {
-    const params = toParams(debounced);
-    if (activeView) params.set("view", activeView);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    const qs = toParams(debounced).toString();
+    if (qs !== new URLSearchParams(window.location.search).toString()) router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     setLimit(PAGE);
   }, [activeView, debounced, pathname, router]);
   const set = (p: Partial<Filters>) => setF((cur) => ({ ...cur, ...p }));
   const apiQs = toParams(debounced, true);
   apiQs.set("limit", String(limit));
-  const { data, isLoading, isFetching } = useGet<JobRow[]>(["jobs", apiQs.toString()], `/api/v1/jobs?${apiQs}`);
+  const { data, isLoading, isFetching } = useGet<JobRow[]>(["jobs", apiQs.toString()], `/api/v1/jobs?${apiQs}`, { keepPrevious: true });
   const { data: facets } = useGet<Facets>(["facets"], "/api/v1/jobs/facets");
-  const jobs = (data ?? []).filter((j) => debounced.quadrant.length < 2 || (j.score && debounced.quadrant.includes(j.score.quadrant)));
+  const jobs = data ?? [];
   const n = activeCount(f);
   const panel = <FilterPanel f={f} set={set} facets={facets} />;
   return (
@@ -654,7 +661,7 @@ function JobsList() {
           </EmptyState>
         ) : (
           <>
-            <Stagger key={apiQs.toString()} className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3">
+            <Stagger key={toParams(debounced, true).toString()} className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3">
               {jobs.map((j, idx) => (
                 <StaggerItem key={j.id} data-tour={idx === 0 ? "job-card" : undefined}>
                   <JobCard job={j} onOpen={setOpenJob} />
@@ -684,6 +691,9 @@ function JobsList() {
               onClick={() => setDrawer(false)}
             />
             <motion.div
+              ref={drawerRef}
+              tabIndex={-1}
+              aria-modal="true"
               role="dialog"
               aria-label="Filtros"
               className="fixed inset-y-0 right-0 z-50 w-[88vw] max-w-sm overflow-y-auto border-l bg-card px-4 pb-6 shadow-2xl lg:hidden"
@@ -730,10 +740,12 @@ function ImportButton() {
           </Field>
           {task.progress && <p className="text-sm text-muted-foreground">{task.progress.message} ({task.progress.pct}%)</p>}
           <Button
-            disabled={(!url && !text) || task.running}
+            disabled={(!url && !text) || task.running || send.isPending}
             onClick={async () => {
-              const r = await send.mutateAsync({ ...(url && { url }), ...(text && { text }), ...(company && { company_name: company }) });
-              task.start(r.task_id);
+              try {
+                const r = await send.mutateAsync({ ...(url && { url }), ...(text && { text }), ...(company && { company_name: company }) });
+                task.start(r.task_id);
+              } catch {} // o erro já aparece no aviso
             }}
           >
             Importar e avaliar
@@ -795,24 +807,9 @@ function Companies() {
   };
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-center justify-between gap-4 overflow-hidden border-primary/15 bg-gradient-to-br from-primary/5 via-card to-card p-5">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Briefcase size={18} /></span>
-          <div>
-            <p className="font-semibold">Seu radar de empresas</p>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Acompanhe boards públicos, destaque empresas favoritas e ajuste quais vagas entram na sua busca.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Badge>{companies.length} empresas</Badge>
-              <Badge tone="primary">{counts.monitored} monitoradas</Badge>
-              <Badge tone="warning">{counts.watchlisted} favoritas</Badge>
-            </div>
-          </div>
-        </div>
-        <Button variant="outline" onClick={async () => { const r = await seed.mutateAsync(); toast.success(`${r.added} empresas adicionadas`); }}>
-          <Plus size={15} /> Importar empresas verificadas
-        </Button>
+      <Card className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <span>100 grandes contratantes de tecnologia (48 no Brasil, 52 fora) com site de vagas público verificado. Só entram vagas dos seus cargos-alvo e que dá para fazer do Brasil.</span>
+        <Button variant="outline" disabled={seed.isPending} onClick={async () => { try { const r = await seed.mutateAsync(); toast.success(`${r.added} empresas adicionadas`); } catch {} }}>Importar empresas verificadas</Button>
       </Card>
       <Card className="space-y-4 p-4">
         <div>
@@ -959,9 +956,17 @@ function Companies() {
   );
 }
 
+const SCHEDULES: Record<string, string> = {
+  "0 9,15 * * 1-5": "Dias úteis, 9h e 15h",
+  "0 9 * * 1-5": "Dias úteis, 9h",
+  "0 */4 * * *": "A cada 4 horas",
+  "0 9 * * *": "Todo dia, 9h",
+  "0 9 * * 1": "Toda segunda, 9h",
+};
+
 function Searches() {
   const { data } = useGet<Search[]>(["searches"], "/api/v1/saved-searches");
-  const [form, setForm] = useState({ name: "", query: "", sources: ["monitored", "boards"], schedule_cron: "0 9,15 * * 1-5", work_models: ["remote"] });
+  const [form, setForm] = useState({ name: "", query: "", sources: ["monitored", "boards"], schedule_cron: "0 9,15 * * 1-5", work_models: ["remote"] as string[] });
   const create = useSend("POST", "/api/v1/saved-searches", { success: "Busca salva", invalidate: [["searches"]] });
   const run = useSend<string>("POST", (id) => `/api/v1/saved-searches/${id}/run`, { success: "Busca iniciada" });
   const del = useSend<string>("DELETE", (id) => `/api/v1/saved-searches/${id}`, { invalidate: [["searches"]] });
@@ -973,123 +978,59 @@ function Searches() {
   ];
   return (
     <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Clock3 size={18} /></span>
-        <div>
-          <h2 className="font-semibold">Buscas recorrentes</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Escolha as fontes e a frequência. Você também pode executar qualquer busca manualmente.</p>
+      <Card className="space-y-2">
+        <div className="grid gap-2 md:grid-cols-3">
+          <Input placeholder="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Input placeholder="Termos (use | para OU): data engineer | engenheiro de dados" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} />
+          <Select value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} aria-label="Quando rodar">
+            {Object.entries(SCHEDULES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </Select>
         </div>
-      </div>
-      <Card className="space-y-5 p-5">
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Nome da busca">
-            <Input placeholder="Ex.: Backend remoto" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </Field>
-          <Field label="Palavras-chave" hint="Use | para combinar alternativas.">
-            <Input placeholder="data engineer | engenheiro de dados" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} />
-          </Field>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Modelo de trabalho:</span>
+          {(["remote", "hybrid", "onsite"] as const).map((w) => (
+            <Chip
+              key={w}
+              active={form.work_models.includes(w)}
+              onClick={() => setForm({ ...form, work_models: form.work_models.includes(w) ? form.work_models.filter((x) => x !== w) : [...form.work_models, w] })}
+            >
+              {{ remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" }[w]}
+            </Chip>
+          ))}
+          <span className="text-xs text-muted-foreground">nenhum marcado = todos</span>
         </div>
-        <section className="space-y-3" aria-labelledby="saved-search-sources-title">
-          <div>
-            <h3 id="saved-search-sources-title" className="text-sm font-semibold">Fontes</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Escolha onde procurar as vagas desta busca.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {sourceOptions.map(({ id, title, detail, icon: Icon }) => {
-              const selected = form.sources.includes(id);
-              return (
-                <label
-                  key={id}
-                  className={`relative flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-all ${
-                    selected ? "border-primary/50 bg-primary/5 shadow-sm" : "hover:border-primary/30 hover:bg-muted/30"
-                  }`}
-                >
-                  <input type="checkbox" className="peer sr-only" checked={selected} onChange={() => toggleSource(id)} />
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                    <Icon size={17} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">{title}</span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{detail}</span>
-                  </span>
-                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-transparent"} peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40`}>
-                    <Check size={13} strokeWidth={3} />
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          {form.sources.includes("boards") && (
-            <p className="flex items-start gap-2 rounded-xl border bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground">
-              <Globe2 size={14} className="mt-0.5 shrink-0 text-primary" />
-              A busca consulta Remotive, RemoteOK, Himalayas, Jobicy, Arbeitnow, Working Nomads e We Work Remotely.
-            </p>
-          )}
-        </section>
-        <section className="space-y-3 border-t pt-5" aria-labelledby="saved-search-schedule-title">
-          <div>
-            <h3 id="saved-search-schedule-title" className="text-sm font-semibold">Recorrência</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Defina quando atualizar automaticamente. Horários seguem o fuso da sua conta.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Frequência">
-              <Select
-                value={SCHEDULE_PRESETS.some((preset) => preset.cron === form.schedule_cron) ? form.schedule_cron : "custom"}
-                onChange={(e) => {
-                  const preset = SCHEDULE_PRESETS.find((option) => option.cron === e.target.value);
-                  if (preset) setForm({ ...form, schedule_cron: preset.cron });
-                }}
-              >
-                {SCHEDULE_PRESETS.map((preset) => <option key={preset.cron} value={preset.cron}>{preset.label} · {preset.detail}</option>)}
-                <option value="custom">Personalizada</option>
-              </Select>
-            </Field>
-            {SCHEDULE_PRESETS.some((preset) => preset.cron === form.schedule_cron) ? (
-              <p className="flex items-center gap-2 self-end rounded-lg bg-accent/50 px-3 py-2.5 text-xs text-muted-foreground">
-                <Clock3 size={14} className="shrink-0 text-primary" />
-                {SCHEDULE_PRESETS.find((preset) => preset.cron === form.schedule_cron)?.detail}
-              </p>
-            ) : (
-              <Field label="Expressão cron personalizada" hint="5 campos: minuto, hora, dia, mês e dia da semana.">
-                <Input value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} placeholder="0 9,15 * * 1-5" />
-              </Field>
-            )}
-          </div>
-        </section>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <p className="text-xs text-muted-foreground">A busca salva fica ativa até você excluí-la.</p>
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("monitored")} onChange={() => toggleSource("monitored")} /> Empresas monitoradas</label>
+          <label className="flex gap-1"><input type="checkbox" checked={form.sources.includes("boards")} onChange={() => toggleSource("boards")} /> Sites de vagas (Remotive, RemoteOK, Himalayas, Jobicy, Arbeitnow, WWR, Working Nomads)</label>
+          <span className="text-xs text-muted-foreground">Vagas do LinkedIn: crie alertas de vaga no LinkedIn (chegam pelo Gmail) ou use “Importar para o tracker” na extensão.</span>
           <Button
-            disabled={!form.name.trim() || !form.query.trim() || !form.sources.length || create.isPending}
-            onClick={() => create.mutate({ name: form.name.trim(), query: form.query.trim(), sources: form.sources, schedule_cron: form.schedule_cron, filters: { work_models: form.work_models } })}
+            disabled={!form.name || !form.query || create.isPending}
+            onClick={() =>
+              create.mutate({
+                name: form.name,
+                query: form.query,
+                sources: form.sources,
+                schedule_cron: form.schedule_cron,
+                filters: form.work_models.length ? { work_models: form.work_models } : {},
+              })
+            }
           >
             <Plus size={15} /> Salvar busca
           </Button>
         </div>
       </Card>
       {data?.map((s) => (
-        <Card key={s.id} className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold">{s.name}</p>
-              <Badge tone={s.is_active ? "success" : "neutral"}>{s.is_active ? "ativa" : "pausada"}</Badge>
-              <Badge tone="primary">{scheduleLabel(s.schedule_cron)}</Badge>
-            </div>
-            <p className="truncate text-sm text-muted-foreground">“{s.query}”</p>
-            <div className="flex flex-wrap gap-1.5">
-              {s.sources.map((source) => (
-                <Badge key={source}>
-                  {source === "monitored" ? "Empresas monitoradas" : source === "boards" ? "Sites públicos" : source === "linkedin" ? "LinkedIn (desativado)" : source}
-                </Badge>
-              ))}
-              <span className="self-center text-xs text-muted-foreground">Última busca: {formatDateTime(s.last_run_at)}</span>
-            </div>
-            {!SCHEDULE_PRESETS.some((preset) => preset.cron === s.schedule_cron) && (
-              <p className="font-mono text-[11px] text-muted-foreground">{s.schedule_cron}</p>
-            )}
+        <Card key={s.id} className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="font-medium">{s.name}</p>
+            <p className="text-xs text-muted-foreground">
+              “{s.query}” · {s.sources.map((x) => ({ monitored: "empresas monitoradas", boards: "sites de vagas" })[x] ?? x).join(", ")} · {SCHEDULES[s.schedule_cron] ?? s.schedule_cron} · última: {formatDateTime(s.last_run_at)}
+            </p>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button size="sm" variant="outline" onClick={() => run.mutate(s.id)}><Search size={14} /> Rodar agora</Button>
-            <Button size="sm" variant="ghost" onClick={() => del.mutate(s.id)}><X size={14} /> Excluir</Button>
+          <div className="flex gap-2">
+            {!s.is_active && <Badge>pausada</Badge>}
+            <Button size="sm" variant="outline" onClick={() => run.mutate(s.id)}>Rodar agora</Button>
+            <Button size="sm" variant="ghost" onClick={() => window.confirm(`Excluir a busca “${s.name}”?`) && del.mutate(s.id)}>Excluir</Button>
           </div>
         </Card>
       ))}

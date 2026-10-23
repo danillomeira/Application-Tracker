@@ -4,7 +4,7 @@ import { CompanyLogo } from "@/components/brand";
 import { useQuery as useRQ, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, Skeleton, Tabs, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, Skeleton, Tabs, Textarea, buttonVariants } from "@/components/ui";
 import { rawFetch } from "@/lib/api";
 import { useGet, useSend, useTask } from "@/lib/hooks";
 import { INTERVIEW_KIND } from "@/lib/labels";
@@ -62,8 +62,8 @@ export default function InterviewPage({ params }: { params: Promise<{ id: string
         description={`${data.round}ª etapa · ${INTERVIEW_KIND[data.kind] ?? data.kind} · ${formatDateTime(data.starts_at)}`}
         actions={
           <>
-            {data.link && <a href={data.link} target="_blank" rel="noreferrer"><Button>Entrar na chamada</Button></a>}
-            <Link href={`/candidaturas/${data.application_id}`}><Button variant="outline">Candidatura</Button></Link>
+            {data.link && <a href={data.link} target="_blank" rel="noreferrer" className={buttonVariants()}>Entrar na chamada</a>}
+            <Link href={`/candidaturas/${data.application_id}`} className={buttonVariants({ variant: "outline" })}>Candidatura</Link>
             <Button variant="outline" disabled={task.running} onClick={async () => task.start((await regen.mutateAsync()).task_id)}>
               {task.running ? task.progress?.message ?? "Gerando…" : "Regenerar dossiê"}
             </Button>

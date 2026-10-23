@@ -3,7 +3,7 @@
 import { CompanyLogo } from "@/components/brand";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Badge, Button, Card, CardTitle, Modal, PageHeader, Select, Skeleton, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardTitle, EmptyState, Modal, PageHeader, Select, Skeleton, Textarea, buttonVariants } from "@/components/ui";
 import { useGet, useSend, useTask } from "@/lib/hooks";
 import { EMAIL_LABEL, INTERVIEW_KIND, STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
 import { formatDateTime } from "@/lib/utils";
@@ -53,8 +53,6 @@ function describe(e: Detail["timeline"][number]) {
       return `E-mail recebido (${EMAIL_LABEL[String(p.label)] ?? p.label}): ${p.summary ?? p.subject ?? ""}`;
     case "message_in":
       return `Mensagem no LinkedIn: ${p.summary ?? ""}`;
-    case "agent_step":
-      return `Robô: ${p.title} ${p.log ? `(${p.log})` : ""}`;
     case "note":
       return `Nota: ${p.text}`;
     case "email_draft":
@@ -72,9 +70,9 @@ function describe(e: Detail["timeline"][number]) {
 
 export default function ApplicationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data: app } = useGet<Detail>(["applications", id], `/api/v1/applications/${id}`);
+  const { data: app, error } = useGet<Detail>(["applications", id], `/api/v1/applications/${id}`);
   const { data: statuses } = useGet<{ transitions: Record<string, string[]> }>(["statuses"], "/api/v1/applications/statuses");
-  const inv = { invalidate: [["applications"]] };
+  const inv = { invalidate: [["applications"], ["jobs"], ["dashboard"]] };
   const patch = useSend<Record<string, unknown>>("PATCH", `/api/v1/applications/${id}`, { success: "Atualizado", ...inv });
   const submitted = useSend("POST", `/api/v1/applications/${id}/submitted`, { success: "Registrado como enviada", ...inv });
   const prepare = useSend("POST", `/api/v1/applications/${id}/prepare`, { success: "Preparação iniciada", ...inv });
@@ -86,6 +84,7 @@ export default function ApplicationPage({ params }: { params: Promise<{ id: stri
   const [pkgOpen, setPkgOpen] = useState(false);
   const pkg = useGet<Package>(["package", id], pkgOpen ? `/api/v1/applications/${id}/package` : null);
 
+  if (error) return <EmptyState title="Candidatura não encontrada">Ela pode ter sido removida. Volte para Candidaturas.</EmptyState>;
   if (!app) return <Skeleton className="h-96" />;
   const allowed = statuses?.transitions[app.status] ?? [];
   return (
@@ -106,7 +105,7 @@ export default function ApplicationPage({ params }: { params: Promise<{ id: stri
               <option value="">Mudar status…</option>
               {allowed.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
             </Select>
-            <Link href={`/vagas/${app.job_id}`}><Button variant="outline">Vaga</Button></Link>
+            <Link href={`/vagas/${app.job_id}`} className={buttonVariants({ variant: "outline" })}>Vaga</Link>
           </>
         }
       />
@@ -114,11 +113,11 @@ export default function ApplicationPage({ params }: { params: Promise<{ id: stri
       <div className="flex flex-wrap gap-2">
         {["discovered", "queued", "skipped"].includes(app.status) && <Button onClick={() => prepare.mutate(undefined)}>Preparar candidatura</Button>}
         {!app.submitted_at && <Button variant="outline" onClick={() => setPkgOpen(true)}>Pacote para candidatura externa</Button>}
-        {!app.submitted_at && <Button variant="success" onClick={() => submitted.mutate(undefined)}>Enviei</Button>}
+        {!app.submitted_at && <Button variant="success" onClick={() => submitted.mutate(undefined)}>Já me candidatei</Button>}
         <Button variant="outline" disabled={task.running} onClick={async () => task.start((await dossier.mutateAsync()).task_id)}>Gerar dossiê</Button>
         <Button variant="outline" disabled={task.running} onClick={async () => task.start((await recruiterNote.mutateAsync({ application_id: id })).task_id)}>Nota para recrutador</Button>
         {app.resume_render_id && (
-          <a href={`/api/v1/resumes/renders/${app.resume_render_id}/pdf`} target="_blank" rel="noreferrer"><Button variant="ghost">CV enviado (PDF)</Button></a>
+          <a href={`/api/v1/resumes/renders/${app.resume_render_id}/pdf`} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>CV enviado (PDF)</a>
         )}
         {task.progress && <span className="self-center text-xs text-muted-foreground">{task.progress.message}</span>}
       </div>
@@ -144,7 +143,6 @@ export default function ApplicationPage({ params }: { params: Promise<{ id: stri
             <Card className="border-warning">
               <CardTitle>Perguntas pendentes</CardTitle>
               {app.pending_questions.filter((p) => p.status === "open").map((p) => <p key={p.id} className="text-sm">• {p.question}</p>)}
-              <Link href="/revisao" className="text-xs text-primary underline">Responder</Link>
             </Card>
           )}
           {app.interviews.length > 0 && (

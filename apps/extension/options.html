@@ -1,24 +1,77 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><title>Assistente — opções</title>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Assistente — opções</title><link rel="stylesheet" href="ui.css">
 <style>
-  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,"Segoe UI",sans-serif;max-width:560px;margin:32px auto;padding:0 16px;color:#0f172a;background:#f5f7fb;letter-spacing:-.01em}
-  .card{background:#fff;border:1px solid #e3e7ef;border-radius:16px;padding:24px;box-shadow:0 18px 40px -16px rgba(15,23,42,.2)}
-  h2{margin:0 0 4px;font-size:20px;letter-spacing:-.02em}p{color:#526075;font-size:13px;margin:0 0 16px}
-  label{display:block;margin:14px 0 6px;font-size:12px;font-weight:600;color:#334155}
-  input[type=text],input[type=password],textarea{width:100%;padding:9px 11px;border:1px solid #e3e7ef;border-radius:10px;box-sizing:border-box;font:inherit}
-  input:focus,textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-  .row{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px}
-  button{margin-top:20px;padding:10px 16px;border:0;border-radius:10px;background:#2563eb;color:#fff;cursor:pointer;font:600 13px inherit;font-family:inherit}
-  small{color:#526075}#status{margin-left:8px;color:#047857;font-size:13px}
-</style>
-</head><body><div class="card">
-<h2>Assistente de candidatura</h2>
-<p>Conecta a extensão ao seu Application Tracker. O token é gerado em Configurações → Integrações → Extensão do navegador.</p>
-<label for="apiUrl">Endereço da API</label><input id="apiUrl" type="text" placeholder="http://localhost:8000">
-<label for="token">Token da extensão</label><input id="token" type="password" placeholder="cole o token gerado no dashboard">
-<div class="row"><input id="enabled" type="checkbox"><span>Assistente ativo</span></div>
-<div class="row"><input id="autoFill" type="checkbox"><span>Preencher automaticamente quando um formulário aparecer</span></div>
-<label for="ignored">Sites ignorados (um por linha)</label><textarea id="ignored" rows="4"></textarea>
-<button id="save">Salvar</button><span id="status"></span>
-<p style="margin-top:16px"><small>O assistente só lê páginas de vagas e formulários de candidatura. Ele nunca clica em enviar: quem envia é você.</small></p>
-</div><script src="options.js"></script></body></html>
+  body{padding:32px 16px}
+  main{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:22px;margin:0;letter-spacing:-.02em}h2{font-size:14px;margin:0 0 10px}
+  .card{padding:18px}
+  .opt{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--border)}.opt:first-of-type{border-top:0;padding-top:0}
+  .opt b{display:block;font-size:13px}
+  label.f{display:block;font-size:12px;font-weight:600;margin:10px 0 6px}
+  .seg{display:flex;flex-direction:column;gap:6px}.seg label{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
+  .seg input{margin-top:3px;accent-color:var(--primary)}.seg label:has(input:checked){border-color:var(--primary);background:var(--accent)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft);border-radius:999px;padding:4px 6px 4px 10px;font-size:12px}
+  .chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
+  .link{background:none;border:0;color:var(--primary);font:inherit;font-weight:600;cursor:pointer;padding:0}
+  .seg.grid2{flex-direction:row}
+  .bar{position:sticky;bottom:0;display:flex;gap:8px;align-items:center;padding:12px 0;background:var(--bg)}
+  #saved{color:var(--ok);font-size:12px;font-weight:600}
+</style></head>
+<body><main>
+  <div class="brand"><img src="icons/icon128.png" alt="" style="width:40px;height:40px;border-radius:12px"><div><h1>Assistente de candidatura</h1><small>Opções da extensão do Application Tracker</small></div></div>
+
+  <section class="card">
+    <h2>Conexão com o app</h2>
+    <p class="muted" style="margin:0 0 6px">O token é gerado no dashboard em Configurações → Integrações → Extensão do navegador <button class="link" id="openDash">(abrir)</button>. Ele fica só neste navegador e nunca é mostrado às páginas que você visita.</p>
+    <label class="f" for="apiUrl">Endereço da API</label><input id="apiUrl" type="url" placeholder="http://localhost:8000">
+    <label class="f" for="dashboardUrl">Endereço do dashboard</label><input id="dashboardUrl" type="url" placeholder="http://localhost:3100">
+    <label class="f" for="token">Token da extensão</label><div class="row"><input id="token" type="password" placeholder="cole o token gerado no dashboard" autocomplete="off" spellcheck="false"><button class="btn" id="showToken" type="button">Mostrar</button></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="test">Testar conexão</button><span id="testResult" class="pill">não testado</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Comportamento</h2>
+    <label class="opt"><div><b>Assistente ativo</b><span class="muted">Desligado, a extensão não faz nada em nenhum site.</span></div><span class="sw"><input type="checkbox" id="enabled"><span></span></span></label>
+    <label class="opt"><div><b>Preencher sozinho</b><span class="muted">Completa o que já sabe com segurança assim que um formulário aparece (e nas próximas etapas). Nunca sobrescreve o que você digitou.</span></div><span class="sw"><input type="checkbox" id="autoFill"><span></span></span></label>
+    <label class="opt"><div><b>Anexar meu CV</b><span class="muted">Coloca o PDF escolhido para a vaga (ou o melhor coringa aprovado) nos campos de arquivo. Só em páginas de candidatura.</span></div><span class="sw"><input type="checkbox" id="attachResume"><span></span></span></label>
+    <label class="opt"><div><b>Destacar o que foi preenchido</b><span class="muted">Contorno verde (do seu perfil), azul (escrito pela IA, revise) e laranja (você mudou).</span></div><span class="sw"><input type="checkbox" id="highlight"><span></span></span></label>
+    <label class="opt"><div><b>Sugestão ao clicar num campo</b><span class="muted">Mostra 💡 com a resposta salva e o botão “Usar”.</span></div><span class="sw"><input type="checkbox" id="suggestOnFocus"><span></span></span></label>
+    <label class="opt"><div><b>Avaliar vagas novas sozinho</b><span class="muted">Em sites de vagas conhecidos, salva e dá nota à vaga ao abrir a página (usa IA). Desligado: só ao clicar em “Avaliar”.</span></div><span class="sw"><input type="checkbox" id="autoAnalyze"><span></span></span></label>
+    <label class="opt"><div><b>Registrar a candidatura ao enviar</b><span class="muted">Depois que você clica em enviar, detecta a página de confirmação e adiciona ao seu acompanhamento (com o CV e as respostas usadas).</span></div><span class="sw"><input type="checkbox" id="autoRegister"><span></span></span></label>
+  </section>
+
+  <section class="card">
+    <h2>Quando mostrar o painel</h2>
+    <div class="seg">
+      <label><input type="radio" name="panelMode" value="auto"><div><b>Em vagas e formulários</b><div class="muted">Recomendado.</div></div></label>
+      <label><input type="radio" name="panelMode" value="forms"><div><b>Só em formulários de candidatura</b><div class="muted">Em páginas de vaga sem formulário, fica quieto.</div></div></label>
+      <label><input type="radio" name="panelMode" value="manual"><div><b>Só quando eu pedir</b><div class="muted">Pelo ícone da extensão ou <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>. O preenchimento automático continua, se ligado.</div></div></label>
+    </div>
+    <label class="f">Lado da tela</label>
+    <div class="grid2 seg"><label><input type="radio" name="panelSide" value="right"><div><b>Direita</b></div></label><label><input type="radio" name="panelSide" value="left"><div><b>Esquerda</b></div></label></div>
+    <label class="opt" style="margin-top:10px"><div><b>Começar minimizado</b><span class="muted">O painel aparece como um botão pequeno no canto.</span></div><span class="sw"><input type="checkbox" id="startMinimized"><span></span></span></label>
+  </section>
+
+  <section class="card">
+    <h2>Sites ignorados</h2>
+    <p class="muted" style="margin:0">A extensão não faz nada nestes sites. Também dá para desligar um site pelo ícone da extensão.</p>
+    <div class="row" style="margin-top:10px"><input id="newSite" type="text" placeholder="ex.: meubanco.com.br"><button class="btn" id="addSite">Adicionar</button></div>
+    <div class="chips" id="sites"></div><p class="muted" id="noSites" style="display:none;margin:8px 0 0">Nenhum site ignorado.</p>
+  </section>
+
+  <section class="card">
+    <h2>Privacidade e dados</h2>
+    <ul class="muted" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+      <li>Nada é enviado sem você clicar em enviar no site. A extensão nunca clica em “enviar”.</li>
+      <li>Senhas, cartões, códigos de verificação, CPF/RG e campos de busca são ignorados.</li>
+      <li>Perguntas sensíveis (salário, visto, dados protegidos) nunca vão para a IA.</li>
+      <li>Só aprende com o que <b>você</b> digitou; o que o assistente preencheu não vira resposta salva.</li>
+    </ul>
+    <div class="row" style="margin-top:10px;justify-content:flex-start"><button class="btn" id="clearStats" type="button">Zerar contadores do dia</button></div>
+  </section>
+
+  <div class="bar"><button class="btn primary" id="save">Salvar</button><button class="btn" id="reset">Restaurar padrões</button><span id="saved"></span></div>
+  <p class="muted">A extensão só lê páginas de vagas e formulários de candidatura, e nunca clica em enviar: quem envia é você.</p>
+</main>
+<script src="defaults.js"></script><script src="options.js"></script>
+</body></html>

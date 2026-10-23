@@ -44,7 +44,7 @@ export const TOURS: Record<string, TourStep[]> = {
     {
       target: "job-card",
       title: "Clique no cartão para agir",
-      body: "Abre um painel com o passo a passo: (1) “Abrir a vaga no site” para se candidatar lá, (2) “Já me candidatei” para acompanhar. O X no cartão descarta a vaga (ela some da lista).",
+      body: "Abre um painel com o passo a passo: (1) “Abrir a vaga no site” para se candidatar lá (a extensão preenche o formulário sozinha), (2) “Já me candidatei” para acompanhar. O X no cartão descarta a vaga.",
     },
     {
       target: "filters",
@@ -81,12 +81,6 @@ export const TOURS: Record<string, TourStep[]> = {
       target: "manual",
       title: "Candidatou-se fora do app?",
       body: "Use “Registrar enviei” para adicionar uma candidatura feita em outro site, para que ela também seja acompanhada.",
-    },
-  ],
-  revisao: [
-    {
-      title: "Revisão e pendências",
-      body: "Aqui aparecem as perguntas de formulários que o app não soube responder (responda uma vez e ele aprende) e as candidaturas preparadas pelo robô esperando a sua aprovação antes do envio.",
     },
   ],
   inbox: [

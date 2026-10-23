@@ -75,6 +75,8 @@ async def gmail_sync(sm: SM, gmail: Gmail | None = None) -> dict[str, Any]:
             ids = await gmail.list_ids("newer_than:14d")
         if latest is None:
             latest = str((await gmail.profile()).get("historyId", ""))
+        # e-mails que ficaram para trás numa rodada anterior (IA fora do ar) entram de novo
+        ids = list(dict.fromkeys([*cursor.get("retry_ids", []), *ids]))
     except Exception as exc:
         async with sm() as s:
             st = await _state(s)
@@ -90,11 +92,18 @@ async def gmail_sync(sm: SM, gmail: Gmail | None = None) -> dict[str, Any]:
         use_labels = await settings_store.flag(s, "gmail_labels")
     async with sm() as s:
         own = ((await oauth.connected_email(s)) or "").lower()
+    retry: list[str] = []
     for mid in ids:
         async with sm() as s:
             if await s.scalar(select(EmailMessage.id).where(EmailMessage.gmail_id == mid)):
                 continue
-        email = await gmail.get(mid)
+        try:
+            email = await gmail.get(mid)
+        except GmailError as exc:
+            if exc.status == 404:
+                continue  # apagado no Gmail
+            retry.append(mid)
+            continue
         if own and email.from_addr == own:
             continue  # enviados pelo próprio usuário
         async with sm() as s:
@@ -103,6 +112,7 @@ async def gmail_sync(sm: SM, gmail: Gmail | None = None) -> dict[str, Any]:
             except AIError as exc:
                 log.warning("classificação adiada (%s): %s", mid, exc)
                 await s.rollback()
+                retry.append(mid)  # o cursor avança, mas este e-mail é tentado de novo na próxima rodada
                 continue
             await s.commit()
             processed += 1
@@ -119,15 +129,32 @@ async def gmail_sync(sm: SM, gmail: Gmail | None = None) -> dict[str, Any]:
                 use_labels = exc.status != 403
     async with sm() as s:
         st = await _state(s)
-        st.cursor = {**(st.cursor or {}), "history_id": latest or cursor.get("history_id")}
+        st.cursor = {**(st.cursor or {}), "history_id": latest or cursor.get("history_id"), "retry_ids": retry[-500:]}
         st.last_success_at, st.consecutive_errors = datetime.now(UTC), 0
         await s.commit()
-    return {"seen": len(ids), "processed": processed, "classified": classified, "labeled": labeled}
+    return {"seen": len(ids), "processed": processed, "classified": classified, "labeled": labeled, "deferred": len(retry)}
 
 
 @celery_app.task(name="ingest.gmail_sync")
 def gmail_sync_task(history_id: str | None = None) -> dict[str, Any]:
-    return run(lambda sm: gmail_sync(sm))
+    # uma sincronização por vez (push do Gmail + polling + botão "sincronizar" podem chegar juntos)
+    import redis
+
+    lock = redis.Redis.from_url(get_settings().redis_url).lock("tracker:gmail_sync", timeout=900, blocking=False)
+    try:
+        got = lock.acquire()
+    except redis.RedisError:
+        got, lock = True, None
+    if not got:
+        return {"skipped": "sincronização já em andamento"}
+    try:
+        return run(lambda sm: gmail_sync(sm))
+    finally:
+        if lock is not None:
+            try:
+                lock.release()
+            except redis.RedisError:
+                pass
 
 
 @celery_app.task(name="ingest.gmail_watch_renew")

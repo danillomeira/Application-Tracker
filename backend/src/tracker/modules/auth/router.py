@@ -72,10 +72,15 @@ async def google_callback(code: str, state: str, session: SessionDep) -> Redirec
 
 
 @router.post("/dev-login")
-async def dev_login(session: SessionDep) -> RedirectResponse:
+async def dev_login(request: Request, session: SessionDep) -> RedirectResponse:
     s = get_settings()
     if not s.auth_dev_login or s.app_env == "prod":
         raise HTTPException(status.HTTP_404_NOT_FOUND)
+    # Só da própria máquina: quem chega pela rede (ou com Host estranho) não entra sem senha.
+    client = request.client.host if request.client else ""
+    host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+    if client not in ("127.0.0.1", "::1", "localhost") or host not in ("localhost", "127.0.0.1", "::1", "test"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "login de desenvolvimento só funciona em localhost")
     await audit.record(session, actor="user", action="auth.dev_login")
     await session.commit()
     resp = RedirectResponse(s.app_base_url + "/hoje", status_code=303)

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tracker.core import settings_store
 from tracker.core.config import get_settings
-from tracker.core.tasks import dispatch
+from tracker.core.tasks import dispatch_after_commit
 from tracker.integrations.claude.client import AIClient, AIRequest, load_prompt
 from tracker.integrations.google.gmail import ParsedEmail
 from tracker.modules.applications import service as app_service
@@ -228,7 +228,7 @@ async def store_email(session: AsyncSession, email: ParsedEmail, reason: str | N
 
 async def ingest_linkedin_alert(session: AsyncSession, email: ParsedEmail) -> EmailMessage | None:
     """Alerta de vagas do LinkedIn: cada vaga do e-mail vira uma vaga em "Vagas" (sem IA para classificar)."""
-    from tracker.core.tasks import dispatch
+    from tracker.core.tasks import dispatch_after_commit
     from tracker.modules.inbox.linkedin_alerts import parse_alert
     from tracker.modules.jobs import service as job_service
     from tracker.modules.jobs.normalize import RawJob
@@ -248,7 +248,7 @@ async def ingest_linkedin_alert(session: AsyncSession, email: ParsedEmail) -> Em
         await session.flush()
         if is_new:
             created += 1
-            dispatch("ai.process_job", job_id=str(job.id))
+            dispatch_after_commit(session, "ai.process_job", job_id=str(job.id))
     row.classification, row.classification_confidence, row.link_status = "notificacao_linkedin", 1.0, "none"
     row.extracted = {**(row.extracted or {}), "summary": f"Alerta do LinkedIn: {len(jobs)} vaga(s), {created} nova(s)"}
     row.processed_at = datetime.now(UTC)
@@ -277,10 +277,21 @@ async def process_email(session: AsyncSession, ai: AIClient, email: ParsedEmail)
     cfg = await settings_store.get(session, "inbox")
     by_id = {str(a.id): (a, j, c) for a, j, c in candidates}
     match = by_id.get(result.application_match or "")
-    if match is None and len(candidates) == 1 and result.label != "recrutador_prospeccao":
+    # palpite pela única candidatura só com remetente autenticado (e-mail forjado não escolhe candidatura)
+    if match is None and email.authenticated and len(candidates) == 1 and result.label != "recrutador_prospeccao":
         match = candidates[0]
+    row.extracted = {**row.extracted, "sender_verified": email.authenticated}
     if result.label in ("irrelevante",):
         row.link_status = "none"
+    elif not email.authenticated and result.label not in ("notificacao_linkedin",):
+        # remetente não autenticado: nada automático (status, agenda, oportunidade); você confere no Inbox
+        row.link_status = "ambiguous"
+        await notify(
+            session,
+            "email_review",
+            {"message": f"E-mail de remetente não verificado, confira: {email.subject}", "email_id": str(row.id)},
+            telegram_too=result.label in NOTIFY,
+        )
     elif match and result.confidence >= cfg["min_confidence"]:
         row.application_id = match[0].id
         row.link_status = "auto"
@@ -419,7 +430,7 @@ async def schedule_interview(
         meta={"interview_id": str(interview.id)},
     )
     interview.scheduled_event_id = ev.id
-    dispatch("ai.build_dossier", application_id=str(app.id), interview_id=str(interview.id))
+    dispatch_after_commit(session, "ai.build_dossier", application_id=str(app.id), interview_id=str(interview.id))
     if not ambiguous:
         await cal.ensure_study_block(session, ev, url)
 
@@ -495,7 +506,7 @@ async def inbound_opportunity(session: AsyncSession, row: EmailMessage, result: 
     await app_service.add_event(
         session, app, "email_in", {"email_id": str(row.id), "label": result.label, "summary": result.summary}
     )
-    dispatch("ai.process_job", job_id=str(job.id))
+    dispatch_after_commit(session, "ai.process_job", job_id=str(job.id))
     await notify(
         session,
         "top_job",

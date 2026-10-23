@@ -29,8 +29,7 @@ out/
 *.synctex.gz
 *.toc
 
-# Agente local
-.tracker-agent/
+# Testes do navegador
 playwright-report/
 test-results/
 
@@ -46,4 +45,7 @@ next-env.d.ts
 coverage/
 
 # Estado do agendador (Celery beat)
+celerybeat-schedule*
+
+# Agendador (Celery beat)
 celerybeat-schedule*

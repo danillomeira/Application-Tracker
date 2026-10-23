@@ -2015,7 +2015,7 @@
      "content": {
       "application/json": {
        "schema": {
-        "$ref": "#/components/schemas/TailorIn"
+        "$ref": "#/components/schemas/tracker__modules__resumes__schemas__TailorIn"
        }
       }
      },
@@ -2442,14 +2442,19 @@
       "schema": {
        "anyOf": [
         {
-         "type": "string"
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
         },
         {
          "type": "null"
         }
        ],
+       "description": "um ou mais quadrantes",
        "title": "Quadrant"
-      }
+      },
+      "description": "um ou mais quadrantes"
      },
      {
       "name": "status",
@@ -2751,6 +2756,8 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "maximum": 500,
+       "minimum": 1,
        "default": 100,
        "title": "Limit"
       }
@@ -2761,6 +2768,7 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "minimum": 0,
        "default": 0,
        "title": "Offset"
       }
@@ -3099,7 +3107,7 @@
      "jobs"
     ],
     "summary": "Approve",
-    "description": "Aprova a vaga: a candidatura entra na fila (Easy Apply) ou vira pacote (externa).",
+    "description": "Aprova a vaga: a candidatura entra na fila e o pacote (CV sob medida, respostas) \u00e9 preparado.",
     "operationId": "approve_api_v1_jobs__job_id__approve_post",
     "parameters": [
      {
@@ -3183,6 +3191,52 @@
          "type": "object",
          "additionalProperties": true,
          "title": "Response Skip Api V1 Jobs  Job Id  Skip Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/jobs/{job_id}/restore": {
+   "post": {
+    "tags": [
+     "jobs"
+    ],
+    "summary": "Restore",
+    "description": "Desfaz o \"N\u00e3o tenho interesse\": a vaga volta para Novas.",
+    "operationId": "restore_api_v1_jobs__job_id__restore_post",
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Job Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Restore Api V1 Jobs  Job Id  Restore Post"
         }
        }
       }
@@ -3522,6 +3576,47 @@
     }
    }
   },
+  "/api/v1/companies/logo": {
+   "get": {
+    "tags": [
+     "companies"
+    ],
+    "summary": "Logo By Name",
+    "description": "Logo pelo nome da empresa (para telas que s\u00f3 t\u00eam o nome). 404 = sem logo; o dashboard mostra as iniciais.",
+    "operationId": "logo_by_name_api_v1_companies_logo_get",
+    "parameters": [
+     {
+      "name": "name",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Name"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/companies/{company_id}": {
    "get": {
     "tags": [
@@ -3738,6 +3833,48 @@
          },
          "title": "Response Seed Default Companies Api V1 Companies Seed Defaults Post"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/companies/{company_id}/logo": {
+   "get": {
+    "tags": [
+     "companies"
+    ],
+    "summary": "Logo",
+    "description": "\u00cdcone do site da empresa (cache no storage). 404 quando n\u00e3o h\u00e1: o dashboard mostra as iniciais.",
+    "operationId": "logo_api_v1_companies__company_id__logo_get",
+    "parameters": [
+     {
+      "name": "company_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Company Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },
@@ -4218,7 +4355,7 @@
      "applications"
     ],
     "summary": "Mark Submitted",
-    "description": "Bot\u00e3o \"enviei\" para candidaturas feitas fora do agente (RF-EXT-04).",
+    "description": "Bot\u00e3o \"J\u00e1 me candidatei\" (RF-EXT-04).",
     "operationId": "mark_submitted_api_v1_applications__app_id__submitted_post",
     "parameters": [
      {
@@ -4281,178 +4418,6 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/ApplicationOut"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/review-queue": {
-   "get": {
-    "tags": [
-     "applications"
-    ],
-    "summary": "Review Queue",
-    "operationId": "review_queue_api_v1_review_queue_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "items": {
-          "$ref": "#/components/schemas/ApplicationOut"
-         },
-         "type": "array",
-         "title": "Response Review Queue Api V1 Review Queue Get"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/review-queue/approve": {
-   "post": {
-    "tags": [
-     "applications"
-    ],
-    "summary": "Approve Reviews",
-    "operationId": "approve_reviews_api_v1_review_queue_approve_post",
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/BulkIds"
-       }
-      }
-     },
-     "required": true
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "additionalProperties": true,
-         "type": "object",
-         "title": "Response Approve Reviews Api V1 Review Queue Approve Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/pending-questions": {
-   "get": {
-    "tags": [
-     "applications"
-    ],
-    "summary": "Pending Questions",
-    "operationId": "pending_questions_api_v1_pending_questions_get",
-    "parameters": [
-     {
-      "name": "status",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "string",
-       "default": "open",
-       "title": "Status"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "array",
-         "items": {
-          "$ref": "#/components/schemas/PendingOut"
-         },
-         "title": "Response Pending Questions Api V1 Pending Questions Get"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/pending-questions/{pq_id}/answer": {
-   "post": {
-    "tags": [
-     "applications"
-    ],
-    "summary": "Post Answer",
-    "operationId": "post_answer_api_v1_pending_questions__pq_id__answer_post",
-    "parameters": [
-     {
-      "name": "pq_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Pq Id"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/PendingAnswerIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "string"
-         },
-         "title": "Response Post Answer Api V1 Pending Questions  Pq Id  Answer Post"
         }
        }
       }
@@ -6308,1249 +6273,6 @@
     }
    }
   },
-  "/api/v1/agent/hello": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Hello",
-    "operationId": "hello_api_v1_agent_hello_post",
-    "parameters": [
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/Hello"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Hello Api V1 Agent Hello Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/next": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Next Job",
-    "operationId": "next_job_api_v1_agent_jobs_next_post",
-    "parameters": [
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/NextIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Next Job Api V1 Agent Jobs Next Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/heartbeat": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Hb",
-    "operationId": "hb_api_v1_agent_jobs__job_id__heartbeat_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Hb Api V1 Agent Jobs  Job Id  Heartbeat Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/step": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Step",
-    "operationId": "step_api_v1_agent_jobs__job_id__step_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/StepIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "string"
-         },
-         "title": "Response Step Api V1 Agent Jobs  Job Id  Step Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/artifact": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Artifact",
-    "operationId": "artifact_api_v1_agent_jobs__job_id__artifact_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "multipart/form-data": {
-       "schema": {
-        "$ref": "#/components/schemas/Body_artifact_api_v1_agent_jobs__job_id__artifact_post"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "string"
-         },
-         "title": "Response Artifact Api V1 Agent Jobs  Job Id  Artifact Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/checkpoint": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Checkpoint",
-    "operationId": "checkpoint_api_v1_agent_jobs__job_id__checkpoint_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/CheckpointIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "string"
-         },
-         "title": "Response Checkpoint Api V1 Agent Jobs  Job Id  Checkpoint Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/resolve": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Resolve",
-    "operationId": "resolve_api_v1_agent_jobs__job_id__resolve_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/ResolveIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Resolve Api V1 Agent Jobs  Job Id  Resolve Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/applications/{app_id}/resume": {
-   "get": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Resume Pdf",
-    "operationId": "resume_pdf_api_v1_agent_applications__app_id__resume_get",
-    "parameters": [
-     {
-      "name": "app_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "App Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/review": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Review",
-    "operationId": "review_api_v1_agent_jobs__job_id__review_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/ReviewIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Review Api V1 Agent Jobs  Job Id  Review Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/submitted": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Submitted",
-    "operationId": "submitted_api_v1_agent_jobs__job_id__submitted_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/tracker__modules__agent_gateway__router__SubmittedIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Submitted Api V1 Agent Jobs  Job Id  Submitted Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/safety-stop": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Safety Stop",
-    "description": "Para tudo, salva estado e avisa (RF-CAN-10). Nunca contorna a prote\u00e7\u00e3o.",
-    "operationId": "safety_stop_api_v1_agent_jobs__job_id__safety_stop_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/SafetyIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Safety Stop Api V1 Agent Jobs  Job Id  Safety Stop Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/fail": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Fail",
-    "operationId": "fail_api_v1_agent_jobs__job_id__fail_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/FailIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Fail Api V1 Agent Jobs  Job Id  Fail Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/search-results": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Search Results",
-    "operationId": "search_results_api_v1_agent_jobs__job_id__search_results_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/SearchResultsIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Search Results Api V1 Agent Jobs  Job Id  Search Results Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/messages": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Messages",
-    "operationId": "messages_api_v1_agent_jobs__job_id__messages_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/MessagesIn"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": true,
-         "title": "Response Messages Api V1 Agent Jobs  Job Id  Messages Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/jobs/{job_id}/done": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Done",
-    "operationId": "done_api_v1_agent_jobs__job_id__done_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "boolean"
-         },
-         "title": "Response Done Api V1 Agent Jobs  Job Id  Done Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent/login-ok": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Login Ok",
-    "operationId": "login_ok_api_v1_agent_login_ok_post",
-    "parameters": [
-     {
-      "name": "site",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "string",
-       "default": "linkedin",
-       "title": "Site"
-      }
-     },
-     {
-      "name": "authorization",
-      "in": "header",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Authorization"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "boolean"
-         },
-         "title": "Response Login Ok Api V1 Agent Login Ok Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent-control/status": {
-   "get": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Status",
-    "operationId": "status_api_v1_agent_control_status_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "additionalProperties": true,
-         "type": "object",
-         "title": "Response Status Api V1 Agent Control Status Get"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent-control/kill": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Kill",
-    "operationId": "kill_api_v1_agent_control_kill_post",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "additionalProperties": {
-          "type": "integer"
-         },
-         "type": "object",
-         "title": "Response Kill Api V1 Agent Control Kill Post"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent-control/resume": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Resume",
-    "operationId": "resume_api_v1_agent_control_resume_post",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "additionalProperties": {
-          "type": "string"
-         },
-         "type": "object",
-         "title": "Response Resume Api V1 Agent Control Resume Post"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent-control/jobs/{job_id}/cancel": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Cancel Job",
-    "operationId": "cancel_job_api_v1_agent_control_jobs__job_id__cancel_post",
-    "parameters": [
-     {
-      "name": "job_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "format": "uuid",
-       "title": "Job Id"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "additionalProperties": {
-          "type": "string"
-         },
-         "title": "Response Cancel Job Api V1 Agent Control Jobs  Job Id  Cancel Post"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/v1/agent-control/artifacts": {
-   "get": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Get Artifact",
-    "operationId": "get_artifact_api_v1_agent_control_artifacts_get",
-    "parameters": [
-     {
-      "name": "key",
-      "in": "query",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Key"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
   "/api/v1/people": {
    "get": {
     "tags": [
@@ -8889,7 +7611,7 @@
      "assistant"
     ],
     "summary": "Analyze",
-    "description": "Analisa a vaga da p\u00e1gina (uma chamada de IA, cache de 90 dias) e avalia (Chance \u00d7 Atratividade).",
+    "description": "Analisa a vaga da p\u00e1gina (uma chamada de IA, cache de 90 dias) e avalia (Chance \u00d7 Atratividade).\n\nVaga j\u00e1 conhecida mas sem descri\u00e7\u00e3o (ex.: importada da lista de busca do LinkedIn) \u00e9 completada com o\ntexto desta p\u00e1gina e reavaliada.",
     "operationId": "analyze_api_v1_assistant_analyze_post",
     "parameters": [
      {
@@ -8929,6 +7651,128 @@
          "additionalProperties": true,
          "title": "Response Analyze Api V1 Assistant Analyze Post"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/import-list": {
+   "post": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Import List",
+    "description": "Vagas de uma lista de busca que VOC\u00ca abriu (ex.: LinkedIn): entram em Vagas e recebem nota.\n\nSem rob\u00f4: a extens\u00e3o s\u00f3 l\u00ea o que j\u00e1 est\u00e1 na sua tela. A descri\u00e7\u00e3o completa chega quando voc\u00ea abre a vaga.",
+    "operationId": "import_list_api_v1_assistant_import_list_post",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ImportListIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "integer"
+         },
+         "title": "Response Import List Api V1 Assistant Import List Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/logo": {
+   "get": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Logo",
+    "description": "Logo da empresa para o painel da extens\u00e3o (o mesmo cache do dashboard).",
+    "operationId": "logo_api_v1_assistant_logo_get",
+    "parameters": [
+     {
+      "name": "company_id",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Company Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },
@@ -9164,7 +8008,7 @@
      "content": {
       "application/json": {
        "schema": {
-        "$ref": "#/components/schemas/tracker__modules__assistant__router__SubmittedIn"
+        "$ref": "#/components/schemas/SubmittedIn"
        }
       }
      }
@@ -9179,6 +8023,250 @@
          "additionalProperties": true,
          "title": "Response Submitted Api V1 Assistant Submitted Post"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tailor": {
+   "post": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Tailor",
+    "description": "Gera o CV sob medida para a vaga (IA + validador de fatos). Acompanhe em GET /assistant/tasks/{id}.",
+    "operationId": "tailor_api_v1_assistant_tailor_post",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/tracker__modules__assistant__router__TailorIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "string"
+         },
+         "title": "Response Tailor Api V1 Assistant Tailor Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tasks/{task_id}": {
+   "get": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Task Status",
+    "operationId": "task_status_api_v1_assistant_tasks__task_id__get",
+    "parameters": [
+     {
+      "name": "task_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Task Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Task Status Api V1 Assistant Tasks  Task Id  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tailored/{variant_id}/approve": {
+   "post": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Approve Tailored",
+    "description": "Voc\u00ea revisou e aprova o CV sob medida: ele passa a ser o anexado nesta vaga.",
+    "operationId": "approve_tailored_api_v1_assistant_tailored__variant_id__approve_post",
+    "parameters": [
+     {
+      "name": "variant_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Variant Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Approve Tailored Api V1 Assistant Tailored  Variant Id  Approve Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tailored/{variant_id}/pdf": {
+   "get": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Tailored Pdf",
+    "operationId": "tailored_pdf_api_v1_assistant_tailored__variant_id__pdf_get",
+    "parameters": [
+     {
+      "name": "variant_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Variant Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },
@@ -10556,25 +9644,6 @@
     ],
     "title": "BlockOut"
    },
-   "Body_artifact_api_v1_agent_jobs__job_id__artifact_post": {
-    "properties": {
-     "file": {
-      "type": "string",
-      "contentMediaType": "application/octet-stream",
-      "title": "File"
-     },
-     "name": {
-      "type": "string",
-      "title": "Name"
-     }
-    },
-    "type": "object",
-    "required": [
-     "file",
-     "name"
-    ],
-    "title": "Body_artifact_api_v1_agent_jobs__job_id__artifact_post"
-   },
    "Body_import_file_api_v1_profile_import_post": {
     "properties": {
      "file": {
@@ -10624,23 +9693,6 @@
      "title"
     ],
     "title": "Body_upload_document_api_v1_documents_post"
-   },
-   "BulkIds": {
-    "properties": {
-     "ids": {
-      "items": {
-       "type": "string",
-       "format": "uuid"
-      },
-      "type": "array",
-      "title": "Ids"
-     }
-    },
-    "type": "object",
-    "required": [
-     "ids"
-    ],
-    "title": "BulkIds"
    },
    "CertBlock": {
     "properties": {
@@ -10706,20 +9758,6 @@
      "name"
     ],
     "title": "Certification"
-   },
-   "CheckpointIn": {
-    "properties": {
-     "state": {
-      "additionalProperties": true,
-      "type": "object",
-      "title": "State"
-     }
-    },
-    "type": "object",
-    "required": [
-     "state"
-    ],
-    "title": "CheckpointIn"
    },
    "CompanyDetail": {
     "properties": {
@@ -12064,24 +11102,6 @@
     ],
     "title": "Experience"
    },
-   "FailIn": {
-    "properties": {
-     "error": {
-      "type": "string",
-      "title": "Error"
-     },
-     "closed": {
-      "type": "boolean",
-      "title": "Closed",
-      "default": false
-     }
-    },
-    "type": "object",
-    "required": [
-     "error"
-    ],
-    "title": "FailIn"
-   },
    "FeedbackIn": {
     "properties": {
      "verdict": {
@@ -12246,36 +11266,28 @@
     "type": "object",
     "title": "HTTPValidationError"
    },
-   "Hello": {
+   "ImportListIn": {
     "properties": {
-     "version": {
+     "source": {
       "type": "string",
-      "title": "Version"
+      "pattern": "^linkedin$",
+      "title": "Source"
      },
-     "sites": {
+     "jobs": {
       "items": {
-       "type": "string"
+       "$ref": "#/components/schemas/ListedJob"
       },
       "type": "array",
-      "title": "Sites"
-     },
-     "machine": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Machine"
+      "maxItems": 200,
+      "title": "Jobs"
      }
     },
     "type": "object",
     "required": [
-     "version"
+     "source",
+     "jobs"
     ],
-    "title": "Hello"
+    "title": "ImportListIn"
    },
    "ImportOut": {
     "properties": {
@@ -13266,6 +12278,12 @@
       "type": "string",
       "title": "Language",
       "default": "any"
+     },
+     "source": {
+      "type": "string",
+      "pattern": "^(user|profile|bank|rule|ai)$",
+      "title": "Source",
+      "default": "user"
      }
     },
     "type": "object",
@@ -13285,6 +12303,55 @@
     },
     "type": "object",
     "title": "LinkedinIn"
+   },
+   "ListedJob": {
+    "properties": {
+     "external_id": {
+      "type": "string",
+      "maxLength": 64,
+      "title": "External Id"
+     },
+     "title": {
+      "type": "string",
+      "maxLength": 300,
+      "title": "Title"
+     },
+     "company": {
+      "type": "string",
+      "maxLength": 200,
+      "title": "Company",
+      "default": ""
+     },
+     "location": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 200
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Location"
+     },
+     "easy_apply": {
+      "type": "boolean",
+      "title": "Easy Apply",
+      "default": false
+     },
+     "text": {
+      "type": "string",
+      "maxLength": 3000,
+      "title": "Text",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "external_id",
+     "title"
+    ],
+    "title": "ListedJob"
    },
    "ManualApplicationIn": {
     "properties": {
@@ -13599,23 +12666,6 @@
     ],
     "title": "Me"
    },
-   "MessagesIn": {
-    "properties": {
-     "messages": {
-      "items": {
-       "additionalProperties": true,
-       "type": "object"
-      },
-      "type": "array",
-      "title": "Messages"
-     }
-    },
-    "type": "object",
-    "required": [
-     "messages"
-    ],
-    "title": "MessagesIn"
-   },
    "MockAnswerIn": {
     "properties": {
      "answer": {
@@ -13655,26 +12705,6 @@
      "application_id"
     ],
     "title": "MockStartIn"
-   },
-   "NextIn": {
-    "properties": {
-     "kinds": {
-      "anyOf": [
-       {
-        "items": {
-         "type": "string"
-        },
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Kinds"
-     }
-    },
-    "type": "object",
-    "title": "NextIn"
    },
    "NoteIn": {
     "properties": {
@@ -14072,129 +13102,6 @@
     ],
     "title": "Page[AuditOut]"
    },
-   "PendingAnswerIn": {
-    "properties": {
-     "value": {
-      "title": "Value"
-     },
-     "save_to_bank": {
-      "type": "boolean",
-      "title": "Save To Bank",
-      "default": true
-     },
-     "scope": {
-      "type": "string",
-      "title": "Scope",
-      "default": "any"
-     }
-    },
-    "type": "object",
-    "required": [
-     "value"
-    ],
-    "title": "PendingAnswerIn"
-   },
-   "PendingOut": {
-    "properties": {
-     "id": {
-      "type": "string",
-      "format": "uuid",
-      "title": "Id"
-     },
-     "application_id": {
-      "type": "string",
-      "format": "uuid",
-      "title": "Application Id"
-     },
-     "question_text": {
-      "type": "string",
-      "title": "Question Text"
-     },
-     "field_kind": {
-      "type": "string",
-      "title": "Field Kind"
-     },
-     "options": {
-      "items": {},
-      "type": "array",
-      "title": "Options"
-     },
-     "context": {
-      "additionalProperties": true,
-      "type": "object",
-      "title": "Context"
-     },
-     "ai_suggestion": {
-      "anyOf": [
-       {
-        "additionalProperties": true,
-        "type": "object"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Ai Suggestion"
-     },
-     "status": {
-      "type": "string",
-      "title": "Status"
-     },
-     "created_at": {
-      "type": "string",
-      "format": "date-time",
-      "title": "Created At"
-     },
-     "expires_at": {
-      "anyOf": [
-       {
-        "type": "string",
-        "format": "date-time"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Expires At"
-     },
-     "company_name": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Company Name"
-     },
-     "job_title": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Job Title"
-     }
-    },
-    "type": "object",
-    "required": [
-     "id",
-     "application_id",
-     "question_text",
-     "field_kind",
-     "options",
-     "context",
-     "ai_suggestion",
-     "status",
-     "created_at",
-     "expires_at"
-    ],
-    "title": "PendingOut"
-   },
    "PersonIn": {
     "properties": {
      "full_name": {
@@ -14582,6 +13489,28 @@
       "type": "boolean",
       "title": "Linkedin Risk Accepted",
       "default": false
+     },
+     "birth_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Birth Date"
+     },
+     "birthplace": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Birthplace"
      }
     },
     "additionalProperties": true,
@@ -14825,27 +13754,6 @@
     ],
     "title": "RenderOut"
    },
-   "ResolveIn": {
-    "properties": {
-     "step_index": {
-      "type": "integer",
-      "title": "Step Index"
-     },
-     "fields": {
-      "items": {
-       "$ref": "#/components/schemas/FormField"
-      },
-      "type": "array",
-      "title": "Fields"
-     }
-    },
-    "type": "object",
-    "required": [
-     "step_index",
-     "fields"
-    ],
-    "title": "ResolveIn"
-   },
    "ResumeContent": {
     "properties": {
      "language": {
@@ -14912,71 +13820,6 @@
      "experience"
     ],
     "title": "ResumeContent"
-   },
-   "ReviewIn": {
-    "properties": {
-     "summary": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Summary"
-     },
-     "screenshot_key": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Screenshot Key"
-     }
-    },
-    "type": "object",
-    "title": "ReviewIn"
-   },
-   "SafetyIn": {
-    "properties": {
-     "kind": {
-      "type": "string",
-      "pattern": "^(captcha|checkpoint|login|warning|unknown_layout|rate_limit|error_page)$",
-      "title": "Kind"
-     },
-     "message": {
-      "type": "string",
-      "title": "Message"
-     },
-     "url": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Url"
-     },
-     "artifacts": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array",
-      "title": "Artifacts"
-     }
-    },
-    "type": "object",
-    "required": [
-     "kind",
-     "message"
-    ],
-    "title": "SafetyIn"
    },
    "SavedSearchIn": {
     "properties": {
@@ -15158,28 +14001,6 @@
      "computed_at"
     ],
     "title": "ScoreOut"
-   },
-   "SearchResultsIn": {
-    "properties": {
-     "jobs": {
-      "items": {
-       "additionalProperties": true,
-       "type": "object"
-      },
-      "type": "array",
-      "title": "Jobs"
-     },
-     "done": {
-      "type": "boolean",
-      "title": "Done",
-      "default": true
-     }
-    },
-    "type": "object",
-    "required": [
-     "jobs"
-    ],
-    "title": "SearchResultsIn"
    },
    "SeedResult": {
     "properties": {
@@ -15411,17 +14232,36 @@
     ],
     "title": "StatusIn"
    },
-   "StepIn": {
+   "SubmittedIn": {
     "properties": {
-     "index": {
-      "type": "integer",
-      "title": "Index"
+     "url": {
+      "type": "string",
+      "title": "Url"
      },
      "title": {
       "type": "string",
-      "title": "Title"
+      "title": "Title",
+      "default": ""
      },
-     "log": {
+     "text": {
+      "type": "string",
+      "maxLength": 60000,
+      "title": "Text",
+      "default": ""
+     },
+     "job_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Job Id"
+     },
+     "company": {
       "anyOf": [
        {
         "type": "string"
@@ -15430,9 +14270,9 @@
         "type": "null"
        }
       ],
-      "title": "Log"
+      "title": "Company"
      },
-     "screenshot_key": {
+     "job_title": {
       "anyOf": [
        {
         "type": "string"
@@ -15441,15 +14281,33 @@
         "type": "null"
        }
       ],
-      "title": "Screenshot Key"
+      "title": "Job Title"
+     },
+     "answers": {
+      "items": {
+       "$ref": "#/components/schemas/LearnItem"
+      },
+      "type": "array",
+      "title": "Answers"
+     },
+     "render_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Render Id"
      }
     },
     "type": "object",
     "required": [
-     "index",
-     "title"
+     "url"
     ],
-    "title": "StepIn"
+    "title": "SubmittedIn"
    },
    "SuggestIn": {
     "properties": {
@@ -15484,32 +14342,6 @@
      "field"
     ],
     "title": "SuggestIn"
-   },
-   "TailorIn": {
-    "properties": {
-     "job_id": {
-      "type": "string",
-      "format": "uuid",
-      "title": "Job Id"
-     },
-     "base_variant_id": {
-      "anyOf": [
-       {
-        "type": "string",
-        "format": "uuid"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Base Variant Id"
-     }
-    },
-    "type": "object",
-    "required": [
-     "job_id"
-    ],
-    "title": "TailorIn"
    },
    "TaskAccepted": {
     "properties": {
@@ -16101,39 +14933,6 @@
     "type": "object",
     "title": "WildcardsIn"
    },
-   "tracker__modules__agent_gateway__router__SubmittedIn": {
-    "properties": {
-     "evidence": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Evidence"
-     },
-     "screenshot_key": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Screenshot Key"
-     },
-     "already_applied": {
-      "type": "boolean",
-      "title": "Already Applied",
-      "default": false
-     }
-    },
-    "type": "object",
-    "title": "SubmittedIn"
-   },
    "tracker__modules__applications__schemas__AnswerOut": {
     "properties": {
      "id": {
@@ -16233,70 +15032,19 @@
     ],
     "title": "EventOut"
    },
-   "tracker__modules__assistant__router__SubmittedIn": {
+   "tracker__modules__assistant__router__TailorIn": {
     "properties": {
-     "url": {
-      "type": "string",
-      "title": "Url"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title",
-      "default": ""
-     },
-     "text": {
-      "type": "string",
-      "maxLength": 60000,
-      "title": "Text",
-      "default": ""
-     },
      "job_id": {
-      "anyOf": [
-       {
-        "type": "string",
-        "format": "uuid"
-       },
-       {
-        "type": "null"
-       }
-      ],
+      "type": "string",
+      "format": "uuid",
       "title": "Job Id"
-     },
-     "company": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Company"
-     },
-     "job_title": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Job Title"
-     },
-     "answers": {
-      "items": {
-       "$ref": "#/components/schemas/LearnItem"
-      },
-      "type": "array",
-      "title": "Answers"
      }
     },
     "type": "object",
     "required": [
-     "url"
+     "job_id"
     ],
-    "title": "SubmittedIn"
+    "title": "TailorIn"
    },
    "tracker__modules__calendar__router__EventOut": {
     "properties": {
@@ -16512,6 +15260,32 @@
      "last_used_at"
     ],
     "title": "AnswerOut"
+   },
+   "tracker__modules__resumes__schemas__TailorIn": {
+    "properties": {
+     "job_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Job Id"
+     },
+     "base_variant_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Base Variant Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "job_id"
+    ],
+    "title": "TailorIn"
    }
   }
  }

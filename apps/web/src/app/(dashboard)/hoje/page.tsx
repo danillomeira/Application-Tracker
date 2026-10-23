@@ -9,10 +9,8 @@ import {
   CalendarClock,
   Check,
   CalendarDays,
-  FileCheck2,
   Inbox,
   Mail,
-  MessageCircleQuestion,
   Send,
   Sparkles,
 } from "lucide-react";
@@ -30,15 +28,11 @@ type Today = {
   pending: Record<string, number>;
   followups: { application_id: string; company: string; job_title: string; next_action: string | null; next_action_at: string | null }[];
   top_jobs: { job_id: string; title: string; company: string; quadrant: string; chance: number; attractiveness: number; action: string }[];
-  quota: { used: number; limit: number };
-  agent: { paused_until: string | null; last_safety_stop_at: string | null };
   stats: { applied_7d: number; responses_7d: number; new_jobs_7d: number };
   integration_errors: { name: string; error: string | null }[];
 };
 
 const PENDING: [string, string, string, React.ComponentType<{ size?: number }>][] = [
-  ["questions", "Perguntas pendentes", "/revisao", MessageCircleQuestion],
-  ["reviews", "Candidaturas para revisar", "/revisao", FileCheck2],
   ["resumes_to_approve", "CVs específicos para aprovar", "/curriculos", Sparkles],
   ["ambiguous_emails", "E-mails para associar", "/inbox", Mail],
   ["calendar_drafts", "Eventos para confirmar", "/agenda", CalendarDays],
@@ -147,7 +141,7 @@ export default function TodayPage() {
             </span>
           </Link>
           {totalPending > 0 && (
-            <Link href="/revisao">
+            <Link href="/inbox">
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/25">
                 Resolver pendências <ArrowRight size={14} />
               </span>
@@ -206,9 +200,6 @@ export default function TodayPage() {
             <span className="grid h-9 w-9 place-items-center rounded-full bg-success/12 text-success"><Check size={17} /></span>
             Tudo em dia: nenhuma pendência agora.
           </Card>
-        )}
-        {data.agent.paused_until && (
-          <p className="mt-2 text-xs text-danger">Robô pausado por segurança até {formatDateTime(data.agent.paused_until)}</p>
         )}
       </div>
 

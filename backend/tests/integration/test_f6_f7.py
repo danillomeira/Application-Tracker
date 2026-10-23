@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import random
+import re
 import zipfile
 from datetime import UTC, datetime, timedelta
 
@@ -217,3 +218,92 @@ async def test_github_import(client: AsyncClient, session) -> None:
         assert any(p["id"] == "etl-kit" for p in master["data"]["projects"]) and master["version"] == 2
     finally:
         insights_router._gh_transport = None
+
+
+async def test_ai_answers_respect_question_intent(session, ai) -> None:
+    """Pergunta condicional que não vale para você e pedido de matrícula nunca viram um texto de apresentação."""
+    from tracker.modules.applications.resolver import resolve_core
+
+    await factories.seed_master(session)
+    job = await factories.job(session, title="Pessoa Desenvolvedora Backend Python")
+    seen: dict[str, str] = {}
+
+    def answer(req):
+        seen["system"] = req.system
+        seen["user"] = req.user
+        return {
+            "answers": [
+                {"key": "m", "value": "Na MyBroker, projetei uma plataforma…", "confidence": 0.95},
+                {"key": "g", "value": "Sou desenvolvedor backend Python…", "confidence": 0.85},
+                {"key": "x", "value": "", "confidence": 0.0},
+            ]
+        }
+
+    ai.on("apply.answer", answer)
+    fields = [
+        FormField(key="m", label="5. Caso você seja colaborador do GB, informe a sua matrícula.", kind="textarea"),
+        FormField(key="g", label="Caso você já tenha trabalhado conosco, conte como foi", kind="textarea"),
+        FormField(key="x", label="Quem indicou você?", kind="text"),
+    ]
+    res, usable = await resolve_core(session, fields, job, allow_ai=True)
+    filled = {r.key for r in res.values}
+    assert "m" not in filled  # matrícula: só você responde (nem vai para a IA)
+    assert 'key="m"' not in seen["user"]
+    assert "g" not in filled  # condicional com confiança < 0,9: fica como sugestão para você revisar
+    assert "x" not in filled and "x" not in usable  # vazio = não se aplica
+    assert "Desenvolvedor" in seen["system"] and "condicional" in seen["system"].lower()  # prompt v3 em uso
+    assert "Pessoa Desenvolvedora Backend Python" in seen["user"]
+
+
+async def test_salary_experience_and_birth_rules(session) -> None:
+    """Pretensão já respondida vale para "expectativa salarial"; tempo de experiência na área; nascimento do perfil."""
+    from tracker.modules.applications.resolver import resolve_core
+    from tracker.modules.profile import service as profile_service
+    from tracker.modules.profile.models import AnswerBankEntry
+
+    await factories.seed_master(session)
+    session.add(
+        AnswerBankEntry(
+            canonical_question="Pretensão salarial", field_kind="text", answer={"value": "12000"}, source="user", sensitive=True
+        )
+    )
+    prefs = await profile_service.get_preferences(session)
+    await profile_service.put_preferences(session, prefs.model_copy(update={"birthplace": "Brasília, DF"}))
+    job = await factories.job(session, language="pt")
+    await session.flush()
+    fields = [
+        FormField(key="s", label="1. Qual sua expectativa salarial (para o modelo CLT)?", kind="textarea", required=True),
+        FormField(
+            key="y", label="3. Qual é o seu tempo de experiência CLT na área de tecnologia?", kind="textarea", required=True
+        ),
+        FormField(key="b", label="4. Qual é a sua cidade e estado de nascimento?", kind="textarea", required=True),
+        FormField(key="d", label="Data de nascimento", kind="text"),
+    ]
+    res, _ = await resolve_core(session, fields, job, allow_ai=False)
+    vals = {r.key: r.value for r in res.values}
+    assert vals["s"] == "12000"
+    assert vals["y"].endswith("anos") and int(vals["y"].split()[0]) >= 1
+    assert vals["b"] == "Brasília, DF"
+    assert "d" not in vals and "d" in {f.key for f in res.pending}  # sem cadastro: fica para você (nunca para a IA)
+
+
+async def test_current_job_block_from_master(session) -> None:
+    """Bloco "atual ou último trabalho": empresa, cargo, início, "Até" vazio e "trabalho atual" marcado, sem IA."""
+    from tracker.modules.applications.resolver import resolve_core
+
+    await factories.seed_master(session)
+    job = await factories.job(session, title="Data Engineer Pleno")
+    fields = [
+        FormField(key="y", label="Em que ano foi seu primeiro emprego ou trabalho remunerado?", kind="number"),
+        FormField(key="c", label="Empresa *", kind="text", required=True),
+        FormField(key="p", label="Posição *", kind="text", required=True),
+        FormField(key="d", label="De", kind="month"),
+        FormField(key="a", label="Até", kind="month"),
+        FormField(key="x", label="Este é o meu trabalho atual", kind="checkbox"),
+        FormField(key="s", label="Atual ou último salário", kind="text"),
+    ]
+    res, _ = await resolve_core(session, fields, job, allow_ai=False)
+    vals = {r.key: r.value for r in res.values}
+    assert vals["y"].isdigit() and vals["c"] and vals["p"] and re.fullmatch(r"\d{4}-\d{2}", vals["d"])
+    assert vals["x"] is True and "a" not in vals
+    assert "s" not in vals  # salário atual: fica para você

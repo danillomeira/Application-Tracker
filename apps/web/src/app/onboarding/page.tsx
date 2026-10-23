@@ -20,7 +20,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AiGuide, ExtensionGuide, GoogleGuide, LatexGuide, TagInput, TelegramGuide, Tip } from "@/components/setup-guides";
+import { AiGuide, ExtensionGuide, GoogleGuide, LatexGuide, LinkedinGuide, TagInput, TelegramGuide, Tip } from "@/components/setup-guides";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge, Button, Card, Chip, EASE, Field, Input, Select, Skeleton, Tabs } from "@/components/ui";
 import { api, rawFetch } from "@/lib/api";
@@ -208,6 +208,8 @@ function Stepper({ step, onGo, status }: { step: number; onGo: (n: number) => vo
             <li key={st.key}>
               <button
                 onClick={() => onGo(i)}
+                aria-label={`Passo ${i + 1}: ${st.label}${done(st.key) ? " (concluído)" : ""}`}
+                aria-current={active ? "step" : undefined}
                 className={cn(
                   "relative flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors",
                   active ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground",
@@ -458,8 +460,17 @@ function ResumeStep({ hasResume, onDone }: { hasResume: boolean; onDone: () => v
               if (f) upload(f);
             }}
             onClick={() => fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            aria-label="Enviar currículo (PDF, DOCX ou YAML)"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                fileRef.current?.click();
+              }
+            }}
             className={cn(
-              "flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-all",
+              "flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-all focus-visible:outline-2 focus-visible:outline-primary",
               drag ? "scale-[1.01] border-primary bg-accent" : "hover:border-primary/50 hover:bg-muted/40",
             )}
           >
@@ -682,7 +693,7 @@ function CurrentJobStep({ onDone }: { onDone: () => void }) {
 }
 
 function IntegrationsStep({ s }: { s: Status }) {
-  const [tab, setTab] = useState<"google" | "telegram" | "extension">("google");
+  const [tab, setTab] = useState<"google" | "telegram" | "extension" | "linkedin">("google");
   const ok = { google: s.checks.google.ok, telegram: s.checks.telegram.ok, extension: s.checks.extension.ok };
   return (
     <StepCard title="Integrações (todas opcionais)" subtitle="Dá para fazer agora ou depois em Configurações → Integrações. Cada passo explica onde clicar.">
@@ -693,6 +704,7 @@ function IntegrationsStep({ s }: { s: Status }) {
           { value: "google", label: `${ok.google ? "✓ " : ""}Gmail e Agenda` },
           { value: "telegram", label: `${ok.telegram ? "✓ " : ""}Telegram` },
           { value: "extension", label: `${ok.extension ? "✓ " : ""}Extensão do navegador` },
+          { value: "linkedin", label: "Vagas do LinkedIn" },
         ]}
       />
       {tab === "google" && (
@@ -700,6 +712,7 @@ function IntegrationsStep({ s }: { s: Status }) {
       )}
       {tab === "telegram" && <TelegramGuide configured={!!s.checks.telegram.configured} linked={s.checks.telegram.ok} />}
       {tab === "extension" && <ExtensionGuide />}
+      {tab === "linkedin" && <LinkedinGuide gmailConnected={s.checks.google.ok} />}
     </StepCard>
   );
 }
@@ -719,6 +732,7 @@ function FinishStep({ s }: { s: Status }) {
         body: JSON.stringify(opts),
       });
       await qc.invalidateQueries({ queryKey: ["onboarding"] });
+      qc.invalidateQueries({ queryKey: ["prefs"] });
       toast.success("Tudo pronto! A primeira busca de vagas já começou.");
       router.push(opts.run_now ? "/vagas" : "/hoje");
     } catch (e) {

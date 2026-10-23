@@ -159,6 +159,14 @@ async def test_extension_end_to_end(servers, session, tmp_path) -> None:
             await page.wait_for_timeout(400)
             await page.click("#phone")
             await page.get_by_text("💡").wait_for(timeout=10000)
+            # a sugestão é uma bolha pequena e escura, nunca um quadro esticado por cima do formulário
+            box = await page.evaluate(
+                "(() => { const b = [...document.querySelectorAll('div[role=dialog]')].find(d => d.textContent.includes('💡'));"
+                " const r = b.getBoundingClientRect(); return {w: r.width, h: r.height, bg: getComputedStyle(b).backgroundColor}; })()"
+            )
+            assert box["h"] < 120 and box["w"] <= 400 and box["bg"] == "rgb(15, 23, 42)", box
+            if os.environ.get("SHOT_DIR"):
+                await page.screenshot(path=os.path.join(os.environ["SHOT_DIR"], "bubble.png"))
             await page.get_by_role("button", name="Usar").dispatch_event("mousedown")
             await page.wait_for_function("document.getElementById('phone').value.length > 5", timeout=5000)
 
@@ -175,6 +183,141 @@ async def test_extension_end_to_end(servers, session, tmp_path) -> None:
     app = await session.scalar(select(Application).where(Application.job_id == __import__("uuid").UUID(job_id)))
     assert app is not None and app.status == "submitted" and app.channel == "assisted"
     answers = (await session.scalars(select(ApplicationAnswer).where(ApplicationAnswer.application_id == app.id))).all()
-    assert any("sponsorship" in a.question_text and a.answer["value"] == "No" for a in answers)
+    assert any("sponsorship" in a.question_text and a.answer["value"] == "No" and a.resolution == "user" for a in answers)
+    assert any(a.resolution == "profile" and a.answer["value"] == "Ana" for a in answers)  # origem de cada resposta
+    assert app.resume_render_id is not None  # o PDF exato que foi anexado (regra 6)
+    # só o que o usuário digitou vira aprendizado; o que veio do perfil não duplica no banco
+    assert await session.scalar(select(AnswerBankEntry).where(AnswerBankEntry.canonical_question == "First name")) is None
     learned = await session.scalar(select(AnswerBankEntry).where(AnswerBankEntry.canonical_question.like("%sponsorship%")))
     assert learned is not None and learned.answer["value"] == "No"  # da próxima vez, sem perguntar
+
+
+async def test_extension_respects_context_and_switches(servers, session, tmp_path) -> None:
+    """Página que não é de vaga: nada é preenchido nem anexado. Desligado ou site ignorado: nem o painel aparece."""
+    await _seed(session, servers)
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            str(tmp_path / "profile2"),
+            headless=False,
+            args=["--headless=new", f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+        )
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else await ctx.wait_for_event("serviceworker")
+            await sw.evaluate(
+                "cfg => Promise.all([chrome.storage.sync.set(cfg.sync), chrome.storage.local.set({ token: cfg.token })])",
+                {"sync": {"apiUrl": servers["api"], "enabled": True, "ignoredDomains": []}, "token": TOKEN},
+            )
+            page = await ctx.new_page()
+            # a página não consegue ler o token pela extensão
+            await page.goto(f"{servers['web']}/unrelated_form.html")
+            await page.wait_for_timeout(3500)
+            assert await page.input_value("#name") == ""
+            assert await page.input_value("#mail") == ""
+            assert await page.evaluate("document.getElementById('doc').files.length") == 0
+            assert await page.locator("#tracker-assistant").count() == 0
+
+            # desligado: nem na página de candidatura
+            await sw.evaluate("() => chrome.storage.sync.set({ enabled: false })")
+            await page.goto(f"{servers['web']}/apply_form.html")
+            await page.wait_for_timeout(3500)
+            assert await page.locator("#tracker-assistant").count() == 0
+            assert await page.input_value("#first") == ""
+
+            # ligar de novo na mesma aba: o assistente volta sem recarregar
+            await sw.evaluate("() => chrome.storage.sync.set({ enabled: true })")
+            await page.locator("#tracker-assistant").get_by_text("Senior Data Engineer").wait_for(timeout=15000)
+            await page.wait_for_function("document.getElementById('first').value === 'Ana'", timeout=15000)
+
+            # site ignorado: o painel some na hora
+            host = servers["web"].removeprefix("http://")
+            await sw.evaluate("h => chrome.storage.sync.set({ ignoredDomains: [h] })", host)
+            await page.locator("#tracker-assistant").wait_for(state="detached", timeout=5000)
+
+            # botões do painel não respondem a cliques simulados pela página
+            await sw.evaluate("() => chrome.storage.sync.set({ ignoredDomains: [] })")
+            await page.locator("#tracker-assistant").get_by_text("Já me candidatei").wait_for(timeout=15000)
+            await page.evaluate(
+                "[...document.getElementById('tracker-assistant').shadowRoot.querySelectorAll('button')]"
+                ".find(b => b.textContent.includes('Já me candidatei')).click()"
+            )
+            await page.wait_for_timeout(1500)
+        finally:
+            await ctx.close()
+    await session.close()
+    apps = (await session.scalars(select(Application).where(Application.submitted_at.is_not(None)))).all()
+    assert apps == []  # o clique forjado não registrou candidatura
+
+
+async def test_panel_stays_usable_over_site_modal(servers, session, tmp_path) -> None:
+    """Formulário dentro de <dialog> modal (top layer): o painel aparece por cima e responde a cliques."""
+    await _seed(session, servers)
+    page_url = f"{servers['web']}/modal_form.html"
+    await job_service.upsert_job(
+        session,
+        RawJob(source="browser", external_id="m1", title="Senior Data Engineer", company_name="Globex", url=page_url,
+               description_text="Python Spark", apply_url=page_url),
+    )  # fmt: skip
+    await session.commit()
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            str(tmp_path / "profile3"),
+            headless=False,
+            args=["--headless=new", f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+        )
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else await ctx.wait_for_event("serviceworker")
+            await sw.evaluate(
+                "cfg => Promise.all([chrome.storage.sync.set(cfg.sync), chrome.storage.local.set({ token: cfg.token })])",
+                {"sync": {"apiUrl": servers["api"], "enabled": True, "ignoredDomains": []}, "token": TOKEN},
+            )
+            page = await ctx.new_page()
+            await page.goto(page_url)
+            panel = page.locator("#tracker-assistant")
+            await panel.get_by_text("Gerar currículo para esta vaga").wait_for(timeout=15000)  # sempre na vaga conhecida
+            await page.click("#open")
+            await page.wait_for_function("document.getElementById('first').value === 'Ana'", timeout=15000)
+            # o painel foi para dentro do modal e está na top layer
+            assert await page.evaluate("!!document.querySelector('#dlg #tracker-assistant')")
+            await panel.locator('button[title="Minimizar"]').click(timeout=5000)  # clique real funciona
+            await panel.get_by_text("Assistente").first.wait_for(timeout=5000)
+        finally:
+            await ctx.close()
+
+
+async def test_fields_labelled_by_nearby_text_not_placeholder(servers, session, tmp_path) -> None:
+    """ATS sem <label>: rótulo em <div> acima e placeholder "Enter"/"Search". O assistente usa o texto de verdade."""
+    await _seed(session, servers)
+    page_url = f"{servers['web']}/generic_labels.html"
+    await job_service.upsert_job(
+        session,
+        RawJob(source="browser", external_id="g1", title="Senior Full Stack Developer", company_name="Globex", url=page_url,
+               description_text="Python Vue", apply_url=page_url),
+    )  # fmt: skip
+    await session.commit()
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            str(tmp_path / "profile4"),
+            headless=False,
+            args=["--headless=new", f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+        )
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else await ctx.wait_for_event("serviceworker")
+            await sw.evaluate(
+                "cfg => Promise.all([chrome.storage.sync.set(cfg.sync), chrome.storage.local.set({ token: cfg.token })])",
+                {"sync": {"apiUrl": servers["api"], "enabled": True, "ignoredDomains": []}, "token": TOKEN},
+            )
+            page = await ctx.new_page()
+            await page.goto(page_url)
+            await page.wait_for_function("document.getElementById('a1').value === 'Ana'", timeout=15000)
+            assert await page.input_value("#a2") == "Teste Silva"
+            assert await page.input_value("#a3") == "ana@example.com"
+            assert "linkedin.com/in/ana-teste" in await page.input_value("#a5")
+            assert await page.evaluate("document.getElementById('a4').files.length") == 1
+            await page.wait_for_function("window.picked === '5-7 years' || window.picked === '8+ years'", timeout=15000)
+            assert await page.input_value("#a7") == ""  # quem indicou: não inventa
+            await page.wait_for_function("document.getElementById('e4').checked", timeout=10000)  # inglês: Advanced
+            assert not await page.is_checked("#e0")
+            panel = page.locator("#tracker-assistant")
+            assert await panel.get_by_text("Enter", exact=True).count() == 0  # nenhum campo chamado "Enter"
+        finally:
+            await ctx.close()

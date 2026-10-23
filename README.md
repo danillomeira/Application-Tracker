@@ -25,11 +25,11 @@ Abra **http://localhost:3100**, clique em **Entrar** e siga o onboarding. O **[g
 | Etapa | O que acontece |
 |---|---|
 | **Onboarding** | Lê o seu CV ou o PDF do LinkedIn com IA, monta o **currículo mestre** e pergunta o que você procura. Nada pessoal fica no código |
-| **Descoberta** | Busca vagas em 100 empresas com site de vagas público (48 no Brasil, 52 fora), em 7 sites de vagas remotas e no LinkedIn (opcional). Só entram vagas dos seus cargos que dá para fazer do Brasil |
+| **Descoberta** | Busca vagas em 100 empresas com site de vagas público (48 no Brasil, 52 fora), em 7 sites de vagas remotas e no LinkedIn (alertas no Gmail e importação pela extensão). Só entram vagas dos seus cargos que dá para fazer do Brasil |
 | **Avaliação** | Filtros eliminatórios e duas notas: **Chance** (probabilidade de resposta) e **Atratividade** (reputação, salário, cultura), cruzadas numa **prioridade** |
 | **Vagas** | Lista com filtros por tecnologia, empresa, salário, modelo de trabalho, senioridade, regime, local, data e notas |
 | **Currículos** | Coringas por perfil (dados, IA, backend, frontend, full stack, mobile, DevOps) e CV específico por vaga, em LaTeX, sempre validados contra o mestre (nada inventado) |
-| **Candidatura** | Extensão do navegador que preenche formulários de qualquer ATS e registra o envio; robô local opcional para o Easy Apply. Você aprova o envio |
+| **Candidatura** | Extensão do navegador que preenche o formulário sozinha (qualquer site de vaga, inclusive o Easy Apply do LinkedIn), anexa o CV certo, completa perguntas abertas com IA e registra o envio. Liga/desliga geral ou por site, pausa de 1 hora, desfazer, revisão da origem de cada resposta e atalhos de teclado. Quem envia é você |
 | **Acompanhamento** | Lê o Gmail, classifica as respostas, separa em marcadores `Vagas/*`, atualiza o kanban e sugere follow-ups (só rascunhos) |
 | **Entrevista** | Dossiê com história, valores e notícias da empresa (com fontes), seus pontos de match, perguntas prováveis e simulação |
 | **Oferta** | Comparador CLT x PJ contra o seu emprego atual, referência salarial e roteiro de negociação |
@@ -50,7 +50,7 @@ Abra **http://localhost:3100**, clique em **Entrar** e siga o onboarding. O **[g
 - **Workers:** Celery (threads) + Redis, com agendador
 - **Banco:** PostgreSQL 16 + pgvector
 - **IA:** Claude, via Claude Code local (sua assinatura) ou API da Anthropic; embeddings locais multilíngues
-- **Integrações:** Gmail, Google Calendar, Telegram, extensão Chrome/Edge (MV3), Playwright (robô opcional)
+- **Integrações:** Gmail, Google Calendar, Telegram, extensão Chrome/Edge (MV3)
 - **PDF:** LaTeX (Jinja2 + tectonic), estilo `classic` em `templates/resumes/classic/`
 
 ## Desenvolvimento
@@ -74,10 +74,10 @@ Produção/VPS: `docker compose -f infra/docker-compose.prod.yml --env-file .env
 | [03 · Requisitos não funcionais](docs/03-requisitos-nao-funcionais.md) | Desempenho, confiabilidade, segurança, custo, usabilidade (RNF-xxx) |
 | [04 · Arquitetura](docs/04-arquitetura.md) | Componentes, deploy híbrido, estrutura do repositório, fluxos |
 | [05 · Modelo de dados](docs/05-modelo-de-dados.md) | Tabelas, campos, enums, máquina de estados |
-| [06 · API](docs/06-api.md) | Endpoints REST, eventos WebSocket, protocolo do agente local |
+| [06 · API](docs/06-api.md) | Endpoints REST e eventos WebSocket |
 | [07 · Integrações](docs/07-integracoes.md) | LinkedIn, Gmail, Calendar, ATS, Telegram |
 | [08 · IA com Claude](docs/08-ia-claude.md) | Tarefas de IA, modelos, schemas, guardrails, custo, avaliação |
-| [09 · Motor de candidatura](docs/09-motor-candidatura.md) | Robô do Easy Apply em detalhe |
+| [09 · Assistente de candidatura](docs/09-motor-candidatura.md) | A extensão do navegador em detalhe |
 | [10 · Motor de avaliação](docs/10-motor-avaliacao.md) | Filtros, notas de Chance e Atratividade, calibração |
 | [11 · Currículos](docs/11-curriculos.md) | Currículo mestre, coringas, específicos, templates, checagem ATS |
 | [12 · Segurança e privacidade](docs/12-seguranca-privacidade.md) | Segredos, OAuth, criptografia, LGPD, termos de uso |
@@ -88,6 +88,6 @@ Produção/VPS: `docker compose -f infra/docker-compose.prod.yml --env-file .env
 | [17 · Questões em aberto](docs/17-questoes-abertas.md) | Decisões pendentes e o padrão assumido |
 | [18 · Glossário](docs/18-glossario.md) | Termos usados no projeto |
 
-## Aviso importante
+## Sem robô
 
-O LinkedIn não oferece API para candidaturas e seu User Agreement proíbe automação. O módulo de Easy Apply opera na sua própria sessão, em ritmo humano e com limites, mas **o uso pode resultar em restrição da conta**. O modo padrão é assistido (você aprova o envio). Veja [docs/12-seguranca-privacidade.md](docs/12-seguranca-privacidade.md) e [docs/16-riscos.md](docs/16-riscos.md).
+O app não automatiza cliques em nenhum site: as vagas do LinkedIn chegam pelos alertas no seu Gmail ou pela importação da lista que você está vendo, e a candidatura é feita por você, com a extensão preenchendo o formulário. Veja [docs/15-decisoes.md](docs/15-decisoes.md) (ADR-020).

@@ -11,13 +11,13 @@ from tracker.modules.agent_gateway.models import AgentJob
 
 from tests import factories
 from tracker.integrations.claude.client import FakeAIClient
-from tracker.modules.applications.models import Application, ApplicationEvent, PendingQuestion
+from tracker.modules.applications.models import Application, ApplicationEvent
 from tracker.modules.applications.tasks import mark_ghosted, prepare
 from tracker.modules.jobs import service as job_service
 from tracker.modules.jobs.models import Job, JobSnapshot, JobSource
 from tracker.modules.jobs.normalize import RawJob
 from tracker.modules.jobs.tasks import process_job
-from tracker.modules.profile.models import AnswerBankEntry, BlocklistEntry
+from tracker.modules.profile.models import BlocklistEntry
 from tracker.modules.resumes import service as resume_service
 from tracker.modules.resumes.content import baseline
 from tracker.modules.scoring.models import JobScore
@@ -118,7 +118,7 @@ async def test_ai_failure_falls_back_to_heuristics(session, sessionmaker) -> Non
 
 
 @pytest.mark.skipif(shutil.which("tectonic") is None, reason="tectonic não instalado")
-async def test_approve_prepare_routes_to_agent(client: AsyncClient, session, sessionmaker, ai, dispatched) -> None:
+async def test_approve_prepares_resume_and_points_to_site(client: AsyncClient, session, sessionmaker, ai, dispatched) -> None:
     await _seed_approved_wildcard(session)
     ai.on("job.extract", lambda req: EXTRACTION)
     job, _ = await job_service.upsert_job(session, raw("1"))
@@ -134,11 +134,10 @@ async def test_approve_prepare_routes_to_agent(client: AsyncClient, session, ses
     )
     out = await prepare(sessionmaker, r.json()["application_id"])
     assert out["status"] == "routed"
-    aj = await session.scalar(select(AgentJob).where(AgentJob.kind == "apply"))
-    assert aj is not None and aj.payload["job_id"] == str(job.id)
     app = await session.get(Application, uuid.UUID(r.json()["application_id"]))
     await session.refresh(app)
     assert app.resume_render_id is not None
+    assert "site da vaga" in (app.next_action or "")  # sem robô: você se candidata com o assistente
 
 
 async def test_manual_application_and_transitions(client: AsyncClient, session, dispatched) -> None:
@@ -157,31 +156,6 @@ async def test_manual_application_and_transitions(client: AsyncClient, session, 
     assert [e["payload"].get("to") for e in detail["timeline"] if e["kind"] == "status_change"][-1] == "offer"
     snaps = (await session.scalars(select(JobSnapshot).where(JobSnapshot.reason == "applied"))).all()
     assert len(snaps) == 1
-
-
-async def test_pending_question_answer_saves_to_bank_and_resumes(client: AsyncClient, session) -> None:
-    job = await factories.job(session)
-    app = Application(job_id=job.id, status="needs_input")
-    session.add(app)
-    await session.flush()
-    aj = AgentJob(kind="apply", status="paused", application_id=app.id, payload={})
-    pq = PendingQuestion(
-        application_id=app.id,
-        question_text="Do you have a driver's license?",
-        field_kind="radio",
-        options=["Yes", "No"],
-    )
-    session.add_all([aj, pq])
-    await session.commit()
-    listed = (await client.get("/api/v1/pending-questions")).json()
-    assert listed[0]["company_name"] == "Globex"
-    r = await client.post(f"/api/v1/pending-questions/{pq.id}/answer", json={"value": "Yes"})
-    assert r.status_code == 200
-    await session.refresh(app)
-    await session.refresh(aj)
-    assert app.status == "queued" and aj.status == "pending"
-    assert aj.state["user_answers"] == {"Do you have a driver's license?": "Yes"}
-    assert (await session.scalar(select(AnswerBankEntry))).canonical_question.startswith("Do you have")
 
 
 async def test_mark_ghosted(session, sessionmaker) -> None:
@@ -203,7 +177,7 @@ async def test_dashboard_today(client: AsyncClient, session) -> None:
     assert r.json()["agent"]["paused_until"] is None
     await factories.seed_master(session)
     r = await client.get("/api/v1/dashboard/today")
-    assert r.json()["onboarding_needed"] is False and r.json()["quota"]["limit"] == 20
+    assert r.json()["onboarding_needed"] is False and "agent" not in r.json() and "quota" not in r.json()
 
 
 async def test_jobs_list_and_import_endpoint(client: AsyncClient, session, dispatched) -> None:

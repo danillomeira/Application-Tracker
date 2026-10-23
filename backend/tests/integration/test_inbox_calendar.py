@@ -12,7 +12,6 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from tests import factories
-from tracker.core import settings_store
 from tracker.integrations import telegram
 from tracker.integrations.claude.client import FakeAIClient
 from tracker.integrations.google import gmail as gmail_mod
@@ -65,7 +64,18 @@ def _b64(s: str) -> str:
     return base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
 
 
-def gmail_message(mid: str, frm: str, subject: str, body: str, labels=None) -> dict:
+def gmail_message(mid: str, frm: str, subject: str, body: str, labels=None, auth: bool = True) -> dict:
+    domain = frm.split("@")[-1].strip(">").strip()
+    auth_header = (
+        [
+            {
+                "name": "Authentication-Results",
+                "value": f"mx.google.com; dkim=pass header.i=@{domain}; spf=pass; dmarc=pass header.from={domain}",
+            }
+        ]
+        if auth
+        else [{"name": "Authentication-Results", "value": "mx.google.com; dkim=none; spf=softfail; dmarc=fail"}]
+    )
     return {
         "id": mid,
         "threadId": f"t-{mid}",
@@ -80,6 +90,7 @@ def gmail_message(mid: str, frm: str, subject: str, body: str, labels=None) -> d
                 {"name": "Subject", "value": subject},
                 {"name": "Date", "value": "Mon, 19 Oct 2026 10:00:00 -0300"},
                 {"name": "Message-ID", "value": f"<{mid}@mail>"},
+                *auth_header,
             ],
             "parts": [
                 {"mimeType": "text/plain", "body": {"data": _b64(body)}},
@@ -102,8 +113,9 @@ def email(
     body: str = "We'd like to interview you",
     labels=None,
     mid: str = "m1",
+    auth: bool = True,
 ) -> ParsedEmail:
-    return parse_message(gmail_message(mid, frm, subject, body, labels))
+    return parse_message(gmail_message(mid, frm, subject, body, labels, auth))
 
 
 def test_prefilter() -> None:
@@ -295,26 +307,12 @@ async def test_telegram_link_commands_and_callbacks(client: AsyncClient, session
     reply = await handle_update(session, {"message": {"chat": {"id": 42}, "text": f"/start {code}"}})
     assert "vinculado" in reply
     assert await handle_update(session, {"message": {"chat": {"id": 7}, "text": "/status"}}) is None  # outro chat
+    reply = await handle_update(session, {"message": {"chat": {"id": 42}, "text": "/hoje"}})
+    assert reply.startswith("*Hoje*") and "Candidaturas na semana" in reply
+    reply = await handle_update(session, {"message": {"chat": {"id": 42}, "text": "/pendentes"}})
+    assert "Nada pendente" in reply or "⏳" in reply
     reply = await handle_update(session, {"message": {"chat": {"id": 42}, "text": "/stop"}})
-    assert "parado" in reply
-    assert (await settings_store.get(session, "agent_control"))["killed"] is True
-    await handle_update(session, {"message": {"chat": {"id": 42}, "text": "/retomar"}})
-    assert (await settings_store.get(session, "agent_control"))["killed"] is False
-    # pergunta pendente respondida por botão
-    from tracker.modules.applications.models import PendingQuestion
-
-    job = await factories.job(session)
-    app = Application(job_id=job.id, status="needs_input")
-    session.add(app)
-    await session.flush()
-    pq = PendingQuestion(application_id=app.id, question_text="Relocate?", field_kind="radio", options=["Yes", "No"])
-    session.add(pq)
-    await session.commit()
-    await handle_update(session, {"message": {"chat": {"id": 42}, "text": "/pendentes"}})
-    assert tg[-1][1]["reply_markup"]["inline_keyboard"][1][0]["callback_data"] == f"pq:{pq.id}:1"
-    await handle_update(session, {"callback_query": {"id": "c1", "data": f"pq:{pq.id}:1", "message": {"chat": {"id": 42}}}})
-    await session.refresh(pq)
-    assert pq.status == "answered" and pq.answered_value == {"value": "No"}
+    assert "/hoje" in reply  # comandos do robô não existem mais: mostra a ajuda
 
 
 async def test_telegram_webhook_requires_secret(anon_client: AsyncClient) -> None:
@@ -363,3 +361,26 @@ async def test_telegram_polling_mode_for_local_runs(monkeypatch) -> None:
     assert calls[-1][1]["offset"] == 901  # confirma o update processado
     reply = next(b for m, b in calls if m == "sendMessage")
     assert reply["chat_id"] == 42 and "/hoje" in reply["text"]
+
+
+def test_sender_authentication_header() -> None:
+    from tracker.integrations.google.gmail import sender_authenticated
+
+    assert sender_authenticated("mx.google.com; dkim=pass header.i=@globex.com; dmarc=pass", "ana@globex.com")
+    # alinhamento relaxado (DMARC): assinatura de subdomínio do remetente vale
+    assert sender_authenticated("mx.google.com; dkim=pass header.d=mail.globex.com", "ana@globex.com")
+    assert sender_authenticated("mx.google.com; dkim=pass header.i=@evil.com; spf=pass", "ana@globex.com") is False
+    assert sender_authenticated("mx.google.com; dkim=pass header.d=globex.com.evil.com", "ana@globex.com") is False
+    assert sender_authenticated("", "ana@globex.com") is False
+
+
+async def test_forged_email_never_acts_automatically(session, ai: FakeAIClient) -> None:
+    """E-mail sem autenticação dizendo "rejeitado": não muda status nem mexe na agenda; fica para revisão."""
+    app, _job, _comp = await _app_for_globex(session)
+    ai.on("email.classify", lambda req: {"label": "rejeicao", "confidence": 0.99, "summary": "rejeitado",
+                                         "application_match": str(app.id), "extracted": {}})  # fmt: skip
+    row = await inbox.process_email(session, ai, email(body="Unfortunately we will not move forward", auth=False, mid="fx"))
+    await session.commit()
+    await session.refresh(app)
+    assert app.status == "submitted" and row is not None and row.link_status == "ambiguous"
+    assert row.extracted["sender_verified"] is False

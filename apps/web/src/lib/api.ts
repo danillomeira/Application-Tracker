@@ -47,6 +47,9 @@ export async function rawFetch(path: string, init?: RequestInit) {
     ...init,
     headers: { "x-tracker-csrf": "1", ...(init?.headers ?? {}) },
   });
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login") && !path.includes("/auth/")) {
+    window.location.href = "/login"; // sessão expirou
+  }
   if (!res.ok) {
     let message = `Erro ${res.status}`;
     try {

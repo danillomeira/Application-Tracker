@@ -31,9 +31,13 @@ def run_worker() -> None:
 
 
 def run_beat() -> None:
+    from tracker.core.config import REPO_ROOT
     from tracker.workers.celery_app import celery_app
 
-    celery_app.start(["beat", "--loglevel=INFO"])
+    # arquivo de estado do agendador dentro de data/ (fora do git e persistente no Docker)
+    schedule = os.environ.get("BEAT_SCHEDULE_FILE") or str(REPO_ROOT / "data" / "celerybeat-schedule")
+    os.makedirs(os.path.dirname(schedule), exist_ok=True)
+    celery_app.start(["beat", "--loglevel=INFO", f"--schedule={schedule}"])
 
 
 def run_seed() -> None:
@@ -88,7 +92,6 @@ def run_init() -> None:
     generated = {
         "SECRET_KEY": secrets.token_urlsafe(48),
         "ENCRYPTION_KEY": base64.b64encode(secrets.token_bytes(32)).decode(),
-        "AGENT_DEVICE_TOKEN": secrets.token_urlsafe(32),
         "GMAIL_PUSH_SECRET": secrets.token_urlsafe(24),
         "TELEGRAM_WEBHOOK_SECRET": secrets.token_urlsafe(24),
     }

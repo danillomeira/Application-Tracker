@@ -168,6 +168,9 @@ class PreferenceData(BaseModel):
     timezone: str = "America/Sao_Paulo"
     international: bool = True
     linkedin_risk_accepted: bool = False
+    # dados pessoais que formulários pedem (preenchidos só a partir daqui, nunca pela IA)
+    birth_date: str | None = None  # dd/mm/aaaa
+    birthplace: str | None = None  # "Cidade, UF"
 
 
 class AnswerIn(BaseModel):

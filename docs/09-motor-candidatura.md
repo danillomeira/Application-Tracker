@@ -1,127 +1,67 @@
-# 09 · Motor de candidatura (Easy Apply)
+# 09 · Assistente de candidatura (extensão do navegador)
 
-## 1. Visão geral
+> Substitui o antigo robô local (Playwright), removido na F10 (ADR-020). Nada clica em "enviar" por você.
 
-```
-API (decide)                                   Agente local (executa)
-────────────                                   ──────────────────────
-fila priorizada + cota + janela ── job.assign ──► abre a vaga
-                                                  já candidatado? → aborta
-                                                  abre o modal Easy Apply
-                                ◄─ fields.resolve ─ extrai campos da etapa
-resolve: banco → regra → IA → pendente
-                                ── fields.resolved ► preenche, anexa CV, avança
-   (pendente) → Telegram/dashboard ── job.resume ──► continua do checkpoint
-                                ◄── review.ready ── tela "Revisar candidatura"
-modo revisão: espera aprovação
-modo auto: checa política
-                                ─ review.approved ► clica "Enviar"
-                                ◄─ job.submitted ── confirma sucesso + evidência
-grava snapshot imutável
-```
+## 1. Ideia
 
-## 2. Agente local
+Você se candidata na **sua sessão normal do navegador**, no site da vaga. A extensão (Chrome/Edge, MV3, `apps/extension`) faz o trabalho chato: avalia a vaga, preenche o formulário, escreve as perguntas abertas quando você pede e registra a candidatura quando você envia. Sem automação de cliques, sem risco de bloqueio por "bot".
 
-### Navegador
-- Playwright (Python) com **contexto persistente** do Chromium em `AGENT_PROFILE_DIR`. O login é feito pelo usuário uma vez (`tracker-agent login linkedin`).
-- **Janela visível** (headed) por padrão. No WSL2, usar WSLg; testar na F0. Alternativa: rodar o agente no Windows nativo (Python + Playwright para Windows).
-- Um único navegador, uma única aba de trabalho, sem paralelismo.
-- User agent, viewport e fuso **reais** da máquina. Nada de spoofing.
+## 2. Fluxo
 
-### Ritmo humano (`agent/browser.py`)
-- Intervalos log-normais entre ações (2–7 s) e entre candidaturas (45–180 s)
-- Digitação com atraso por caractere (40–120 ms) em campos de texto
-- Rolagem até o elemento antes de clicar
-- Pausa longa a cada N candidaturas
-- Limites diários em `daily_quota`, verificados antes de cada ação
+1. **Página da vaga**: o painel mostra logo, Chance, Atratividade, reputação e se a empresa costuma responder. Vaga desconhecida → "Avaliar e salvar vaga" (uma chamada de IA, cache de 90 dias). Vaga importada sem descrição (lista do LinkedIn, alerta do Gmail) é completada com o texto da página e reavaliada.
+2. **Formulário**: assim que aparece, o assistente **preenche sozinho** o que sabe com segurança (perfil → banco de respostas → regras), sem sobrescrever o que você digitou. Formulários em etapas: campos novos são preenchidos quando surgem.
+3. **Perguntas abertas**: "Completar com IA" faz **uma** chamada para todas as pendentes e preenche (contorno azul, para revisar).
+4. **Perguntas sensíveis** (salário, visto, dados pessoais protegidos): nunca vão para a IA; ficam para você (contorno laranja).
+5. **Clique num campo vazio**: sugestão 💡 com "Usar" e "✨ Gerar com IA".
+6. **Envio**: você clica em enviar no site. A extensão detecta a página de confirmação e registra a candidatura (canal `assisted`) com as respostas usadas, que também viram aprendizado no banco de respostas. Há também o botão "Já me candidatei".
 
-### Segurança (`agent/safety.py`)
-Antes e depois de cada ação, verificar:
-| Sinal | Ação |
+## 3. Preenchimento robusto
+
+| Tipo | Como |
 |---|---|
-| Captcha / "verificação de segurança" / checkpoint | `safety.stop`, notificação imediata |
-| Página de login (sessão expirou) | `safety.stop`, pedir login manual |
-| Aviso de uso incomum / restrição | `safety.stop` + **pausar o módulo por 72 h** + alerta |
-| Layout desconhecido (seletor crítico ausente) | tentar o fallback por IA (§6) em modo revisão; se falhar, `safety.stop` |
-| Erro HTTP 429 / página de erro | parar, aplicar backoff de horas |
-| Kill switch | parar em ≤ 5 s, salvar checkpoint |
+| Texto, e-mail, telefone, número | simula digitação (`insertText`, o mesmo caminho de colar), aceito por React/Vue/Angular e campos com máscara; fallback no setter nativo + eventos |
+| Lista (`<select>`) e opções (rádio) | equivalências PT/EN ("Advanced" = "Avançado", "Sim" = "Yes"), "contém" e faixas numéricas ("3–5 anos") |
+| Dropdown customizado (`role=combobox`) | digita e escolhe a opção mais próxima na lista que abrir |
+| Arquivo | anexa o PDF do CV escolhido para a vaga |
+| Data | converte dd/mm/aaaa para o formato do campo |
 
-Em todo `safety.stop`: screenshot, HTML, trace do Playwright, URL → `agent_job.artifacts`.
+## 4. Quando age (contexto)
 
-## 3. Percorrendo o modal
+- Só em **páginas de vaga ou candidatura**: vaga já conhecida, etapa de candidatura vinda de uma vaga (mesma aba, mesmo em outro domínio), site de vagas conhecido, página que a API classifica como vaga, ou formulário que pede currículo. Em qualquer outra página com formulário não preenche nem anexa nada.
+- Em iframes, só formulários de ATS conhecidos (Greenhouse/Lever embutidos).
+- Ignora: senhas, cartões, códigos de verificação/OTP, CPF/RG, tokens e busca do site.
+- Aprende só com eventos reais do usuário (`isTrusted`) fora do preenchimento automático. Cada resposta enviada leva a origem (`user`, `profile`, `bank`, `rule`, `ai`); só `user` vira banco de respostas.
+- Registro automático do envio só se você clicou em enviar há menos de 15 minutos (formulário ou botão "Submit/Enviar/Candidatar").
+- Botões do painel aceitam só cliques reais: scripts da página não acionam o assistente.
+- Estado da aba (vaga de origem, respostas, PDF anexado) fica no service worker (`chrome.storage.session`), não no `sessionStorage` da página.
+- O token fica em `chrome.storage.local` e só o service worker o usa; as páginas só recebem a configuração sem o token. O service worker aceita das páginas apenas os endpoints do assistente.
 
-1. Abrir a URL da vaga. Se aparecer "Candidatura enviada" / "Applied", marcar `submitted` (reconciliação) e encerrar.
-2. Clicar em "Candidatura simplificada" / "Easy Apply".
-3. Para cada etapa:
-   - **Extrair campos** pela árvore de acessibilidade: rótulo, tipo (text, number, select, radio, checkbox, textarea, file, date, typeahead), opções, obrigatório, valor atual, mensagem de erro.
-   - Enviar `fields.resolve`. Receber valores ou `pause`.
-   - Preencher. Campos que o LinkedIn já preencheu com dados do perfil (e-mail, telefone): manter se baterem com o mestre; senão, corrigir.
-   - **Currículo:** selecionar o PDF existente ou fazer upload do `resume_render` escolhido. Conferir que o nome do arquivo anexado bate.
-   - Clicar "Avançar"/"Next"/"Revisar". Se aparecer um erro de validação, reenviar só os campos com erro para a resolução (máx. 2 tentativas) e depois pausar.
-   - Salvar o checkpoint (`agent_job.state`) e um screenshot da etapa.
-4. Na tela de revisão: desmarcar "Seguir empresa" (configurável), `review.ready`.
-5. Após a aprovação: "Enviar candidatura". Esperar a confirmação, capturar evidência e fechar o diálogo.
+## 5. Painel e opções
 
-## 4. Resolução de perguntas
+- Lista do que falta (clique para ir ao campo), barra de progresso, "Completar com IA", "Preencher de novo", "Desfazer", "Revisar preenchidos" (com a origem de cada resposta), "Já me candidatei".
+- Cabeçalho: desligar neste site, opções, minimizar, fechar nesta página.
+- **Currículo para esta vaga** (sempre em vaga conhecida): gerar com IA (`POST /assistant/tailor`, acompanha em `GET /assistant/tasks/{id}`), ver o PDF, aprovar (`POST /assistant/tailored/{id}/approve`, só se o validador passou) e anexar no formulário. O aprovado passa a ser o PDF anexado nesta vaga.
+- **Modais do site:** formulário em `<dialog>` modal (top layer) leva o painel para dentro do modal e o mantém como popover por cima, clicável.
+- Popup: liga/desliga geral, por site, pausa de 1 hora, preencher sozinho, anexar CV, contadores do dia.
+- Opções (`defaults.js` é a fonte única): API e dashboard, token, preencher sozinho, anexar CV, contornos, sugestão ao clicar, avaliar vagas sozinho, registrar ao enviar, quando mostrar o painel, lado da tela, começar minimizado, sites ignorados.
+- Não cobre o campo em que você está: troca de lado; dá para arrastar pelo título (posição lembrada por site) ou minimizar num botão flutuante.
+- Na busca de vagas do LinkedIn: "Importar para o tracker" envia as vagas visíveis para a aba Vagas.
 
-Ordem (a primeira que resolver com confiança suficiente vence):
+## 6. Vagas do LinkedIn sem robô
 
-1. **Campos de perfil**: nome, e-mail, telefone, cidade, LinkedIn, GitHub, portfólio → direto do mestre.
-2. **Banco de respostas, correspondência exata**: pergunta normalizada (minúsculas, sem acentos e pontuação) igual a `canonical_question` ou a um alias, respeitando `conditions` (idioma da vaga, regime).
-3. **Banco de respostas, semântica**: similaridade de embedding ≥ 0,90 com o mesmo `field_kind`. Opções de select/radio mapeadas por similaridade de texto; se mais de uma opção puder corresponder, deixar pendente para revisão.
-4. **Regras determinísticas** (`apply/rules.py`):
-   - "Quantos anos de experiência com X?" → soma dos períodos das experiências que usam a skill X (pelo mestre), arredondada para baixo. Se X não estiver no mestre → **0** (nunca inventar), e a vaga recebe flag de gap
-   - "Você fala inglês/espanhol?" → `languages` do mestre
-   - "Pretensão salarial" → `preference.min_salary` + regra de margem por regime/moeda (**nunca IA**)
-   - "Disponível para começar?" → banco de respostas
-   - "Concorda com..." (termos, políticas de privacidade) → padrão configurável, inicialmente pendente na primeira vez
-5. **IA** (`apply.answer`) para perguntas abertas e de múltipla escolha não cobertas. Resultado com `confidence`.
-6. **Pendente**: confiança abaixo do limiar, pergunta sensível ou campo desconhecido.
+- **Alertas de vaga** do LinkedIn que chegam no Gmail viram vagas automaticamente (`modules/inbox/linkedin_alerts.py`), sem IA para classificar.
+- **Importação da lista** pela extensão (`POST /assistant/import-list`).
+- A descrição completa entra quando você abre a vaga (`/assistant/analyze` enriquece vagas "magras").
 
-Perguntas **sensíveis** (sempre banco ou pendência, nunca IA): salário, autorização de trabalho/visto, patrocínio, deficiência, raça, gênero, orientação, antecedentes, dados de documentos.
+## 7. API (token próprio da extensão)
 
-### Pergunta pendente
-- A candidatura vai para `needs_input`, o agente salva o checkpoint e **passa para a próxima vaga da fila** (não fica parado).
-- Notificação no Telegram: empresa, cargo, pergunta, opções (botões quando houver ≤ 6), sugestão da IA.
-- Ao responder: escolher "salvar no banco" (padrão) ou "só desta vez". A candidatura volta para a fila com prioridade.
-- Pendências expiram em 72 h (configurável) → candidatura vai para `skipped` com motivo.
+`POST /assistant/page` · `POST /assistant/analyze` · `POST /assistant/fields` (devolve `values`, `suggestions`, `sensitive`, `open`) · `POST /assistant/suggest` (só leitura: não mexe no banco de respostas) · `POST /assistant/learn` · `POST /assistant/submitted` (respostas com origem + `render_id` do PDF anexado) · `POST /assistant/import-list` · `GET /assistant/resume` (header `x-render-id`) · `GET /assistant/logo`
 
-## 5. Políticas (`automation_policy`)
-```yaml
-easy_apply:
-  mode: review                # review | auto
-  auto:
-    min_quadrant: top         # top | top_or_volume
-    min_chance: 70
-    min_answer_confidence: 0.9
-    allow_tailored_resume: false   # CV específico sempre exige revisão
-    max_per_day: 10           # dentro da cota geral
-  follow_company: false
-  dry_run: false
-external_apply:
-  mode: assisted              # sempre revisão
-email:
-  send: never                 # só rascunhos, imutável
-linkedin_messages:
-  send: never                 # só rascunhos, imutável
-```
-`email.send` e `linkedin_messages.send` não podem ser alterados para outro valor (validação no backend).
+Autenticação: `Authorization: Extension <token>`. O cookie do dashboard só vale fora de origens de extensão e com o header CSRF nas escritas.
 
-## 6. Fallback por IA para layout desconhecido
-Quando um seletor crítico falha:
-1. Capturar a árvore de acessibilidade (`page.accessibility.snapshot()`) da área do modal.
-2. `apply.map_fields` devolve o mapeamento campo → localizador (role + nome).
-3. Executar com os localizadores retornados, em **modo revisão obrigatório** para aquela candidatura.
-4. Registrar o mapeamento como sugestão de atualização do `selectors.yaml` (para revisão humana no repositório).
+## 8. Testes
 
-## 7. Candidaturas externas (F6)
-- `apply_kind = external`: o sistema monta o pacote (CV, carta, respostas para as perguntas conhecidas do ATS, checklist).
-- Para Greenhouse e Lever: o detalhe da vaga via API pública traz as perguntas do formulário, o que permite preparar todas as respostas antes.
-- Preenchimento assistido no agente (mesmo motor de resolução, adaptadores por site em `agent/sites/<ats>/`), **sempre em revisão**, com o usuário clicando em enviar.
-- Contas em ATS (Gupy, Workday) são do usuário; o agente não cria contas.
-
-## 8. Testes do motor
-- **Fixtures HTML** de cada tipo de etapa do Easy Apply (`tests/fixtures/linkedin/easy_apply/*.html`) servidas localmente; o Playwright roda contra elas no CI.
-- Casos: etapa de contato, upload de CV, perguntas com select/radio/texto/número, typeahead de cidade, erro de validação, tela de revisão, sucesso, captcha, logout, layout alterado.
-- Testes de resolução de perguntas com o banco de respostas e a IA fake.
-- `dry_run` obrigatório nas primeiras 10 candidaturas reais após qualquer mudança de seletor.
+`backend/tests/e2e/test_extension.py` carrega a extensão real no Chromium contra a API real e páginas locais:
+- formulário de vaga: preenchimento automático, equivalência de opções, campo de etapa seguinte, "Completar com IA", "Usar" da sugestão, pergunta sensível intocada, registro do envio com o PDF e a origem de cada resposta;
+- página que não é de vaga: nada preenchido nem anexado, sem painel;
+- interruptores: desligado não age, religar volta sem recarregar, site ignorado some na hora, clique forjado pela página não registra candidatura.

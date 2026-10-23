@@ -350,10 +350,10 @@ def suggested_action(quad: str, needs_tailored: bool, has_recruiter: bool) -> st
             parts.insert(1, "mensagem ao recrutador")
         return " + ".join(parts)
     if quad == "bet":
-        return "CV específico + contato/indicação antes de aplicar (sem modo automático)"
+        return "CV específico + contato/indicação antes de aplicar"
     if quad == "volume":
-        return "coringa; elegível ao modo automático"
-    return "não aplicar (só se sobrar cota)"
+        return "coringa; candidatura rápida com o assistente"
+    return "não aplicar (só se sobrar tempo)"
 
 
 async def _feedback_similarity(session: AsyncSession, job: Job) -> float | None:

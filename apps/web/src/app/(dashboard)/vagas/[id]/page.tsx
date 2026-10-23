@@ -3,7 +3,9 @@
 import { CompanyLogo } from "@/components/brand";
 import Link from "next/link";
 import { use } from "react";
-import { Badge, Button, Card, CardTitle, PageHeader, ScoreBar, Skeleton } from "@/components/ui";
+import { ExternalLink } from "lucide-react";
+import { Badge, Button, buttonVariants, Card, CardTitle, EmptyState, PageHeader, ScoreBar, Skeleton } from "@/components/ui";
+import { ACTION_LABEL, isApplied } from "@/lib/job-actions";
 import { useGet, useSend, useTask } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE, STATUS_LABEL } from "@/lib/labels";
 import { formatDateTime, money } from "@/lib/utils";
@@ -75,16 +77,25 @@ function BreakdownTable({ data }: { data: Breakdown }) {
 
 export default function JobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { data: job, refetch } = useGet<JobDetail>(["jobs", id], `/api/v1/jobs/${id}`);
+  const { data: job, refetch, error } = useGet<JobDetail>(["jobs", id], `/api/v1/jobs/${id}`);
   const tailorTask = useTask(() => refetch());
+  const letterTask = useTask(() => refetch());
   const profileTask = useTask(() => refetch());
-  const approve = useSend("POST", `/api/v1/jobs/${id}/approve`, { success: "Aprovada", invalidate: [["jobs"]] });
+  const inv = { invalidate: [["jobs"], ["applications"], ["dashboard"], ["facets"]] };
   const rescore = useSend("POST", `/api/v1/jobs/${id}/rescore`, { success: "Reavaliação agendada" });
   const tailor = useSend<{ job_id: string }, { task_id: string }>("POST", "/api/v1/resumes/variants/tailored");
   const letter = useSend<void, { task_id: string }>("POST", `/api/v1/resumes/cover-letter?job_id=${id}`);
   const profile = useSend<void, { task_id: string }>("POST", job ? `/api/v1/companies/${job.company_id}/refresh-profile` : "");
+  const submitted = useSend<{ job_id: string; channel: string }>("POST", "/api/v1/applications/manual", {
+    success: "Candidatura registrada: acompanhe em Candidaturas",
+    ...inv,
+  });
+  const skip = useSend("POST", `/api/v1/jobs/${id}/skip`, { success: "Vaga descartada", ...inv });
+  if (error) return <EmptyState title="Vaga não encontrada">Ela pode ter sido removida. Volte para Vagas.</EmptyState>;
   if (!job) return <Skeleton className="h-96" />;
   const s = job.score;
+  const link = job.apply_url || job.canonical_url;
+  const done = isApplied(job.application_status);
   return (
     <div className="space-y-4">
       <PageHeader
@@ -93,15 +104,44 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
         description={`${job.company_name} · ${job.location ?? "—"} · ${job.work_model ?? "modelo n/d"}${job.regime ? ` · ${job.regime}` : ""}`}
         actions={
           <>
-            {job.application_id ? (
-              <Link href={`/candidaturas/${job.application_id}`}><Button variant="outline">Candidatura: {STATUS_LABEL[job.application_status ?? ""]}</Button></Link>
-            ) : null}
-            <Button onClick={() => approve.mutate(undefined)} disabled={s?.quadrant === "blocked"}>Aprovar</Button>
-            <Button variant="outline" disabled={tailorTask.running} onClick={async () => tailorTask.start((await tailor.mutateAsync({ job_id: id })).task_id)}>
-              {tailorTask.running ? `CV: ${tailorTask.progress?.message}` : "Gerar CV específico"}
+            {job.application_id && done ? (
+              <Link href={`/candidaturas/${job.application_id}`} className={buttonVariants({ variant: "outline" })}>
+                Candidatura: {STATUS_LABEL[job.application_status ?? ""]}
+              </Link>
+            ) : (
+              <>
+                {link && (
+                  <a href={link} target="_blank" rel="noreferrer" className={buttonVariants()}>
+                    {ACTION_LABEL.apply} <ExternalLink size={14} />
+                  </a>
+                )}
+                <Button variant="outline" disabled={submitted.isPending} onClick={() => submitted.mutate({ job_id: id, channel: "external" })}>
+                  {ACTION_LABEL.submitted}
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              disabled={tailorTask.running}
+              onClick={async () => {
+                try { tailorTask.start((await tailor.mutateAsync({ job_id: id })).task_id); } catch {}
+              }}
+            >
+              {tailorTask.running ? `Currículo: ${tailorTask.progress?.message ?? "…"}` : ACTION_LABEL.tailor}
             </Button>
-            <Button variant="outline" onClick={async () => tailorTask.start((await letter.mutateAsync()).task_id)}>Carta</Button>
+            <Button
+              variant="outline"
+              disabled={letterTask.running}
+              onClick={async () => {
+                try { letterTask.start((await letter.mutateAsync()).task_id); } catch {}
+              }}
+            >
+              {letterTask.running ? `Carta: ${letterTask.progress?.message ?? "…"}` : ACTION_LABEL.cover}
+            </Button>
             <Button variant="ghost" onClick={() => rescore.mutate(undefined)}>Reavaliar</Button>
+            {!done && job.application_status !== "skipped" && (
+              <Button variant="ghost" disabled={skip.isPending} onClick={() => skip.mutate(undefined)}>{ACTION_LABEL.skip}</Button>
+            )}
           </>
         }
       />
@@ -152,7 +192,14 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
                 Responde ~{Math.round(s.explanation.responsiveness.rate * 100)}% (confiança {s.explanation.responsiveness.confidence})
               </p>
             )}
-            <Button size="sm" variant="outline" disabled={profileTask.running} onClick={async () => profileTask.start((await profile.mutateAsync()).task_id)}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={profileTask.running}
+              onClick={async () => {
+                try { profileTask.start((await profile.mutateAsync()).task_id); } catch {}
+              }}
+            >
               {profileTask.running ? "Pesquisando…" : "Pesquisar reputação e cultura"}
             </Button>
           </Card>

@@ -40,6 +40,8 @@ Você se candidata na **sua sessão normal do navegador**, no site da vaga. A ex
 
 - Lista do que falta (clique para ir ao campo), barra de progresso, "Completar com IA", "Preencher de novo", "Desfazer", "Revisar preenchidos" (com a origem de cada resposta), "Já me candidatei".
 - Cabeçalho: desligar neste site, opções, minimizar, fechar nesta página.
+- **Currículo para esta vaga** (sempre em vaga conhecida): gerar com IA (`POST /assistant/tailor`, acompanha em `GET /assistant/tasks/{id}`), ver o PDF, aprovar (`POST /assistant/tailored/{id}/approve`, só se o validador passou) e anexar no formulário. O aprovado passa a ser o PDF anexado nesta vaga.
+- **Modais do site:** formulário em `<dialog>` modal (top layer) leva o painel para dentro do modal e o mantém como popover por cima, clicável.
 - Popup: liga/desliga geral, por site, pausa de 1 hora, preencher sozinho, anexar CV, contadores do dia.
 - Opções (`defaults.js` é a fonte única): API e dashboard, token, preencher sozinho, anexar CV, contornos, sugestão ao clicar, avaliar vagas sozinho, registrar ao enviar, quando mostrar o painel, lado da tela, começar minimizado, sites ignorados.
 - Não cobre o campo em que você está: troca de lado; dá para arrastar pelo título (posição lembrada por site) ou minimizar num botão flutuante.

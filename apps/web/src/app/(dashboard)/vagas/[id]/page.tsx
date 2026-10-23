@@ -122,7 +122,7 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
             )}
             <Button
               variant="outline"
-              disabled={tailorTask.running || s?.quadrant === "blocked"}
+              disabled={tailorTask.running}
               onClick={async () => {
                 try { tailorTask.start((await tailor.mutateAsync({ job_id: id })).task_id); } catch {}
               }}

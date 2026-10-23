@@ -20,7 +20,7 @@
   const state = {
     filling: false, epoch: 0, cfg: null, card: null, pageInfo: null, fields: [], status: new Map(), edits: new Map(),
     reported: false, busy: false, msg: "", minimized: false, hidden: false, logo: null, linkedinList: [], forcedPanel: false,
-    relevant: false, failures: 0, showFilled: false, tab: {},
+    relevant: false, failures: 0, showFilled: false, tab: {}, tailor: null,
   };
 
   // ---------------- comunicação ----------------
@@ -223,8 +223,8 @@
     nativeSet(el, v);
     return !!el.value;
   }
-  async function attachResume(el) {
-    if (state.cfg?.attachResume === false || !applyContext()) return null;
+  async function attachResume(el, manual) {
+    if (!manual && (state.cfg?.attachResume === false || !applyContext())) return null;
     const { b64, filename, renderId } = await bg({ type: "resume", jobId: jobId() });
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const dt = new DataTransfer();
@@ -490,7 +490,8 @@
     host = document.createElement("div");
     host.id = "tracker-assistant";
     const side = state.cfg?.panelSide === "left" ? "left" : "right";
-    host.style.cssText = `position:fixed;${side}:16px;bottom:16px;z-index:2147483646`;
+    host.style.cssText = `position:fixed;${side}:16px;bottom:16px;top:auto;z-index:2147483646`;
+    if (side === "right") host.style.left = "auto"; else host.style.right = "auto";
     shadow = host.attachShadow({ mode: "open" });
     document.documentElement.appendChild(host);
     try {
@@ -499,7 +500,39 @@
     } catch {}
     const saved = tab.get().minimized;
     state.minimized = saved === undefined ? !!state.cfg?.startMinimized : saved === true;
+    placeLayer(true);
   }
+  // ---------------- camada: o painel fica visível mesmo com modal do site aberto ----------------
+  // <dialog> modal e popovers ficam na "top layer", acima de qualquer z-index, e deixam o resto da página inerte.
+  // Então o painel entra no modal aberto (fica clicável) e vira popover (fica por cima).
+  function openModal() {
+    let modals = [];
+    try { modals = [...document.querySelectorAll("dialog:modal")]; } catch { modals = [...document.querySelectorAll("dialog[open]")]; }
+    return modals.filter((d) => d.isConnected && visible(d)).pop() || null;
+  }
+  function raise(el) {
+    if (!el?.isConnected || typeof el.showPopover !== "function") return;
+    if (!el.hasAttribute("popover")) {
+      el.setAttribute("popover", "manual");
+      // popover vem com estilo próprio (centralizado, borda, fundo): desfaz para manter a posição do painel
+      Object.assign(el.style, { margin: "0", border: "0", padding: "0", background: "transparent", overflow: "visible", width: "auto", height: "auto", color: "inherit" });
+    }
+    try { if (el.matches(":popover-open")) el.hidePopover(); el.showPopover(); } catch {}
+  }
+  let lastLayer = null;
+  function placeLayer(force) {
+    const parent = openModal() || document.documentElement;
+    for (const el of [host, bubble]) {
+      if (!el?.isConnected && el !== host) continue;
+      if (!el) continue;
+      if (el.parentNode !== parent) { parent.appendChild(el); force = true; }
+    }
+    // o painel volta para o topo quando aparece um modal ou popover novo
+    const top = [...document.querySelectorAll(":popover-open, dialog[open]")].filter((x) => x !== host && x !== bubble).pop() || null;
+    if (force || top !== lastLayer) { lastLayer = top; raise(host); if (bubble) raise(bubble); }
+  }
+  setInterval(() => { if (host?.isConnected) placeLayer(false); }, 700);
+
   const QUAD = { top: "Prioridade máxima", bet: "Aposta", volume: "Volume", discard: "Descartar", blocked: "Bloqueada" };
   const SRC = { profile: "perfil", bank: "banco", rule: "regra", user: "você", ai: "IA" };
   const scoreColor = (v) => (v >= 60 ? "#16a34a" : v >= 40 ? "#d97706" : "#dc2626");
@@ -537,6 +570,7 @@
       if (extra.length) body += `<div class="muted">${extra.join(" · ")}</div>`;
       if (s?.missing_must?.length) body += `<div class="muted">Você não tem: ${esc(s.missing_must.slice(0, 4).join(", "))}</div>`;
       if (c.application?.submitted_at) body += `<div class="msg ok">${ICON.check} Você já se candidatou a esta vaga.</div>`;
+      body += tailorSection(c);
     } else if (state.linkedinList.length) {
       body += `<div class="sec"><h4>${state.linkedinList.length} vaga(s) nesta busca do LinkedIn</h4><div class="muted">Envie para a aba Vagas do tracker: elas recebem nota e você se candidata com o assistente.</div>
         <div class="btns" style="margin-top:8px"><button class="b b1 grow" id="import">Importar para o tracker</button></div></div>`;
@@ -604,6 +638,11 @@
     on("undo", undoFill);
     on("tog", () => { state.showFilled = !state.showFilled; render(); });
     on("sent", () => reportSubmitted(true));
+    on("tailor", startTailor);
+    on("tailorApprove", approveTailor);
+    on("tailorView", () => c?.tailored && bg({ type: "openPdf", variantId: c.tailored.variant_id }).catch((e) => say(e.message)));
+    on("tailorEdit", () => bg({ type: "openDashboard", path: "/curriculos" }).catch(() => {}));
+    on("tailorAttach", reattachResume);
     on("openapp", () => bg({ type: "openDashboard", path: `/vagas/${c.job_id}` }).catch(() => {}));
     shadow.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", (e) => {
       if (!e.isTrusted) return;
@@ -643,6 +682,8 @@
       state.card = info;
       tab.set(info.flow_page ? { jobId: info.job_id } : { jobId: info.job_id, jobUrl: location.href, company: info.company, jobTitle: info.title });
       loadLogo();
+      const tt = tab.get();
+      if (tt.tailorTask && tt.tailorJob === info.job_id && !state.tailor) { state.tailor = { taskId: tt.tailorTask, msg: "Gerando com IA…" }; pollTailor(); }
       if (info.needs_details) analyze(true); // vaga importada sem descrição: completa com o texto desta página
     } else {
       state.pageInfo = info;
@@ -665,6 +706,86 @@
       render();
       if (state.fields.length) autoFill(true);
     } catch (e) { if (!silent) say(`Não foi possível avaliar: ${e.message}`); }
+  }
+
+  // ---------------- currículo sob medida para a vaga ----------------
+  function tailorSection(c) {
+    const t = c.tailored;
+    const run = state.tailor;
+    const spin = '<i class="spin" style="color:var(--p)"></i>';
+    let html = `<div class="sec"><h4>📄 Currículo para esta vaga</h4>`;
+    if (run) {
+      html += `<div class="muted" style="display:flex;gap:8px;align-items:center">${spin} ${esc(run.msg || "Gerando com IA… (1 a 3 minutos)")}</div>`;
+    } else if (!t) {
+      html += `<div class="muted">Um CV adaptado a esta vaga, só com fatos do seu currículo (o validador confere tudo).</div>
+        <div class="btns" style="margin-top:8px"><button class="b b1 grow" id="tailor">${ICON.spark} Gerar currículo para esta vaga</button></div>`;
+    } else if (!t.passed) {
+      html += `<div class="muted bad">A IA citou algo que não está no seu currículo: corrija no tracker ou gere de novo.</div>
+        <div class="btns" style="margin-top:8px"><button class="b b2 grow" id="tailorEdit">Corrigir no tracker</button><button class="b b2" id="tailor">Gerar de novo</button></div>`;
+    } else if (t.status !== "approved") {
+      html += `<div class="muted">Pronto! Revise e aprove: depois disso ele é o CV anexado nesta vaga.</div>
+        <div class="btns" style="margin-top:8px"><button class="b b1 grow" id="tailorApprove">${ICON.check} Aprovar e usar</button>${t.has_pdf ? '<button class="b b2" id="tailorView">Ver PDF</button>' : ""}<button class="b b3" id="tailor" title="Gerar outra versão">${ICON.refresh}</button></div>`;
+    } else {
+      const fileField = state.fields.find((f) => f.kind === "file" && CV_LABEL.test(f.label));
+      html += `<div class="muted ok">${ICON.check} Aprovado: é o CV anexado nesta vaga${t.filename ? ` (${esc(t.filename)})` : ""}.</div>
+        <div class="btns" style="margin-top:8px">${fileField ? '<button class="b b2 grow" id="tailorAttach">Anexar este CV no formulário</button>' : ""}${t.has_pdf ? '<button class="b b2" id="tailorView">Ver PDF</button>' : ""}<button class="b b3" id="tailor" title="Gerar outra versão">${ICON.refresh}</button></div>`;
+    }
+    return html + "</div>";
+  }
+  async function startTailor() {
+    const id = state.card?.job_id;
+    if (!id || state.tailor) return;
+    state.tailor = { msg: "Na fila…" };
+    render();
+    try {
+      const { task_id } = await api("POST", "/tailor", { job_id: id });
+      state.tailor = { taskId: task_id, msg: "Gerando com IA… (1 a 3 minutos)" };
+      tab.set({ tailorTask: task_id, tailorJob: id });
+      pollTailor();
+    } catch (e) { state.tailor = null; say(`Não consegui gerar: ${e.message}`); }
+  }
+  async function pollTailor() {
+    const run = state.tailor;
+    if (!run?.taskId) return;
+    const epoch = state.epoch;
+    try {
+      const r = await api("GET", `/tasks/${run.taskId}`);
+      if (epoch !== state.epoch) return;
+      if (r.status === "done" || r.status === "failed") {
+        state.tailor = null;
+        tab.set({ tailorTask: null });
+        if (r.status === "failed") return say(`A geração falhou: ${r.error || "tente de novo"}`);
+        if (state.card) state.card = { ...state.card, tailored: r.tailored };
+        state.msg = r.tailored?.passed ? "📄 Currículo pronto: revise e aprove." : "O validador barrou fatos fora do seu currículo.";
+        return render();
+      }
+      state.tailor = { ...run, msg: r.message ? `${r.message}…` : run.msg };
+      render();
+    } catch {}
+    setTimeout(pollTailor, 3000);
+  }
+  async function approveTailor() {
+    const v = state.card?.tailored;
+    if (!v) return;
+    try {
+      const r = await api("POST", `/tailored/${v.variant_id}/approve`);
+      state.card = { ...state.card, tailored: r.tailored };
+      state.msg = "✓ Aprovado: este CV será anexado nesta vaga.";
+      render();
+    } catch (e) { say(e.message); }
+  }
+  /** Troca o arquivo já anexado pelo CV aprovado da vaga. */
+  async function reattachResume() {
+    const f = state.fields.find((x) => x.kind === "file" && CV_LABEL.test(x.label));
+    const el = f && byKey(f.key);
+    if (!el) return say("Não achei o campo de currículo nesta página.");
+    state.filling = true;
+    try {
+      el.value = "";
+      const name = await attachResume(el, true);
+      if (name) { state.status.set(f.key, { label: f.label, status: "filled", value: "__resume__", source: "profile", auto: true }); paint(el, "ok"); say(`✓ ${name} anexado.`); }
+    } catch (e) { say(`Não consegui anexar: ${e.message}`); }
+    finally { setTimeout(() => { state.filling = false; }, 50); }
   }
 
   // ---------------- LinkedIn: importar as vagas da busca ----------------
@@ -776,7 +897,8 @@
           try { show(await api("POST", "/suggest", { url: location.href, job_id: jobId(), field, allow_ai: true }), true); } catch (er) { label.textContent = er.message; }
         }));
       }
-      document.documentElement.appendChild(bubble);
+      (openModal() || document.documentElement).appendChild(bubble);
+      raise(bubble);
     };
     const known = state.status.get(field.key);
     if (known?.value && known.status === "suggestion") return show({ value: known.value, source: "ai" }, false);
@@ -911,7 +1033,7 @@
   function reset() {
     state.epoch++;
     state.card = null; state.pageInfo = null; state.reported = false; state.status.clear(); state.edits.clear(); cache.clear();
-    state.msg = ""; state.logo = null; state.linkedinList = []; state.fields = []; state.failures = 0; state.hidden = false; state.forcedPanel = false;
+    state.msg = ""; state.logo = null; state.tailor = null; state.linkedinList = []; state.fields = []; state.failures = 0; state.hidden = false; state.forcedPanel = false;
     hideBubble();
   }
 

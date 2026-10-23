@@ -238,3 +238,39 @@ async def test_extension_respects_context_and_switches(servers, session, tmp_pat
     await session.close()
     apps = (await session.scalars(select(Application).where(Application.submitted_at.is_not(None)))).all()
     assert apps == []  # o clique forjado não registrou candidatura
+
+
+async def test_panel_stays_usable_over_site_modal(servers, session, tmp_path) -> None:
+    """Formulário dentro de <dialog> modal (top layer): o painel aparece por cima e responde a cliques."""
+    await _seed(session, servers)
+    page_url = f"{servers['web']}/modal_form.html"
+    await job_service.upsert_job(
+        session,
+        RawJob(source="browser", external_id="m1", title="Senior Data Engineer", company_name="Globex", url=page_url,
+               description_text="Python Spark", apply_url=page_url),
+    )  # fmt: skip
+    await session.commit()
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            str(tmp_path / "profile3"),
+            headless=False,
+            args=["--headless=new", f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+        )
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else await ctx.wait_for_event("serviceworker")
+            await sw.evaluate(
+                "cfg => Promise.all([chrome.storage.sync.set(cfg.sync), chrome.storage.local.set({ token: cfg.token })])",
+                {"sync": {"apiUrl": servers["api"], "enabled": True, "ignoredDomains": []}, "token": TOKEN},
+            )
+            page = await ctx.new_page()
+            await page.goto(page_url)
+            panel = page.locator("#tracker-assistant")
+            await panel.get_by_text("Gerar currículo para esta vaga").wait_for(timeout=15000)  # sempre na vaga conhecida
+            await page.click("#open")
+            await page.wait_for_function("document.getElementById('first').value === 'Ana'", timeout=15000)
+            # o painel foi para dentro do modal e está na top layer
+            assert await page.evaluate("!!document.querySelector('#dlg #tracker-assistant')")
+            await panel.locator('button[title="Minimizar"]').click(timeout=5000)  # clique real funciona
+            await panel.get_by_text("Assistente").first.wait_for(timeout=5000)
+        finally:
+            await ctx.close()

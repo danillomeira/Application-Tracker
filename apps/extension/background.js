@@ -4,7 +4,9 @@ const DEFAULTS = globalThis.TRACKER_DEFAULTS;
 const logos = new Map(); // cache por empresa durante a sessão do navegador
 
 // O que um content script pode pedir à API (o resto só popup/opções, que são páginas da própria extensão).
-const PAGE_API = new Set(["POST /page", "POST /analyze", "POST /fields", "POST /suggest", "POST /submitted", "POST /import-list"]);
+const PAGE_API = new Set(["POST /page", "POST /analyze", "POST /fields", "POST /suggest", "POST /submitted", "POST /import-list", "POST /tailor"]);
+const PAGE_API_RE = [/^GET \/tasks\/[0-9a-f-]{36}$/i, /^POST \/tailored\/[0-9a-f-]{36}\/approve$/i];
+const pageAllowed = (m, p) => PAGE_API.has(`${m} ${p}`) || PAGE_API_RE.some((r) => r.test(`${m} ${p}`));
 
 async function token() {
   const { token: local } = await chrome.storage.local.get({ token: "" });
@@ -72,7 +74,7 @@ const tabKey = (id) => `tab:${id}`;
 async function tabState(id) {
   return (await chrome.storage.session.get({ [tabKey(id)]: {} }))[tabKey(id)];
 }
-chrome.tabs.onRemoved.addListener((id) => chrome.storage.session.remove(tabKey(id)));
+chrome.tabs?.onRemoved.addListener((id) => chrome.storage.session.remove(tabKey(id)));
 
 // Contadores do dia (mostrados no popup)
 async function bump(field, n = 1) {
@@ -95,7 +97,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return reply({ ok: true, data: await res.json() });
       }
       if (msg.type === "api") {
-        if (fromPage(sender) && !PAGE_API.has(`${msg.method} ${msg.path}`)) throw new Error("chamada não permitida");
+        if (fromPage(sender) && !pageAllowed(msg.method, msg.path)) throw new Error("chamada não permitida");
         const res = await api(msg.method, msg.path, msg.body);
         return reply({ ok: true, data: await res.json() });
       }
@@ -132,6 +134,19 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         if (!c.ignoredDomains.includes(host)) await chrome.storage.sync.set({ ignoredDomains: [...c.ignoredDomains, host] });
         return reply({ ok: true });
       }
+      if (msg.type === "openPdf") {
+        // abre o PDF do CV sob medida numa aba (blob da própria extensão: sem expor o token)
+        const id = String(msg.variantId || "");
+        if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("currículo inválido");
+        await chrome.tabs.create({ url: chrome.runtime.getURL(`pdf.html#${id}`) });
+        return reply({ ok: true });
+      }
+      if (msg.type === "pdf") {
+        const id = String(msg.variantId || "");
+        if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("currículo inválido");
+        const res = await api("GET", `/tailored/${id}/pdf`);
+        return reply({ ok: true, data: await toB64(res) });
+      }
       if (msg.type === "openOptions") { await chrome.runtime.openOptionsPage(); return reply({ ok: true }); }
       if (msg.type === "openDashboard") {
         const c = await config();
@@ -147,8 +162,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   return true;
 });
 
-// atalhos de teclado (chrome://extensions/shortcuts para trocar): só o quadro principal da aba
-chrome.commands.onCommand.addListener(async (command) => {
+// atalhos de teclado (chrome://extensions/shortcuts para trocar): só o quadro principal da aba.
+// `?.`: alguns navegadores/perfis não expõem chrome.commands; sem isso o service worker inteiro parava aqui.
+chrome.commands?.onCommand.addListener(async (command) => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
   const type = { "toggle-panel": "tracker:show-panel", "fill-form": "tracker:fill", "ai-fill": "tracker:ai" }[command];

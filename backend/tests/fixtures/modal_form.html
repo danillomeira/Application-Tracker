@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Senior Data Engineer - Globex Careers</title></head>
+<body>
+<h1>Senior Data Engineer</h1>
+<h2>About the role</h2><p>Globex is hiring.</p><h2>Requirements</h2><p>Python, Spark</p>
+<button id="open">Easy Apply</button>
+<dialog id="dlg">
+  <form id="apply" method="dialog">
+    <label for="first">First name</label><input id="first" name="first_name">
+    <label for="email">Email</label><input id="email" type="email" name="email">
+    <label for="li">LinkedIn profile</label><input id="li" name="linkedin">
+    <label for="cv">Resume/CV</label><input id="cv" type="file" name="resume">
+  </form>
+</dialog>
+<script>document.getElementById('open').onclick = () => document.getElementById('dlg').showModal();</script>
+</body></html>

@@ -90,3 +90,29 @@ async def test_saved_search_put_validates_cron(client: AsyncClient) -> None:
 async def test_multiple_quadrants_filter(client: AsyncClient) -> None:
     r = await client.get("/api/v1/jobs?quadrant=top&quadrant=bet")
     assert r.status_code == 200
+
+
+async def test_assistant_tailor_flow(anon_client: AsyncClient, session, dispatched) -> None:
+    from tracker.modules.resumes.content import baseline
+    from tracker.modules.resumes.models import ResumeVariant
+
+    m = await factories.seed_master(session)
+    await settings_store.put(session, "extension", {"token_sha256": hashlib.sha256(b"tok").hexdigest()})
+    job = await factories.job(session, canonical_url="https://jobs.example.com/de-1")
+    await session.commit()
+    h = {"authorization": "Extension tok"}
+    r = await anon_client.post("/api/v1/assistant/tailor", json={"job_id": str(job.id)}, headers=h)
+    assert r.status_code == 202 and dispatched[-1][0] == "ai.resume_tailor"
+    task = await anon_client.get(f"/api/v1/assistant/tasks/{r.json()['task_id']}", headers=h)
+    assert task.json()["status"] == "pending"
+    from tracker.modules.profile.service import current_version
+
+    v = ResumeVariant(kind="tailored", slug="t1", name="t", language="en", status="draft", job_id=job.id,
+                      content=baseline(m, "data_engineer", "en").model_dump(), master_version=(await current_version(session)).version,
+                      validation={"passed": True})  # fmt: skip
+    session.add(v)
+    await session.commit()
+    page = await anon_client.post("/api/v1/assistant/page", json={"url": job.canonical_url, "title": "", "text": ""}, headers=h)
+    assert page.json()["tailored"]["status"] == "draft"
+    ok = await anon_client.post(f"/api/v1/assistant/tailored/{v.id}/approve", headers=h)
+    assert ok.status_code == 200 and ok.json()["tailored"]["status"] == "approved"

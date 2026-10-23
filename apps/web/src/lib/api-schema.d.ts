@@ -2759,6 +2759,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assistant/tailor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tailor
+         * @description Gera o CV sob medida para a vaga (IA + validador de fatos). Acompanhe em GET /assistant/tasks/{id}.
+         */
+        post: operations["tailor_api_v1_assistant_tailor_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Task Status */
+        get: operations["task_status_api_v1_assistant_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/tailored/{variant_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Tailored
+         * @description Você revisou e aprova o CV sob medida: ele passa a ser o anexado nesta vaga.
+         */
+        post: operations["approve_tailored_api_v1_assistant_tailored__variant_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/tailored/{variant_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tailored Pdf */
+        get: operations["tailored_pdf_api_v1_assistant_tailored__variant_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assistant/resume": {
         parameters: {
             query?: never;
@@ -4945,16 +5019,6 @@ export interface components {
              */
             allow_ai: boolean;
         };
-        /** TailorIn */
-        TailorIn: {
-            /**
-             * Job Id
-             * Format: uuid
-             */
-            job_id: string;
-            /** Base Variant Id */
-            base_variant_id?: string | null;
-        };
         /** TaskAccepted */
         TaskAccepted: {
             /**
@@ -5242,6 +5306,14 @@ export interface components {
              */
             occurred_at: string;
         };
+        /** TailorIn */
+        tracker__modules__assistant__router__TailorIn: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+        };
         /** EventOut */
         tracker__modules__calendar__router__EventOut: {
             /**
@@ -5343,6 +5415,16 @@ export interface components {
             use_count: number;
             /** Last Used At */
             last_used_at: string | null;
+        };
+        /** TailorIn */
+        tracker__modules__resumes__schemas__TailorIn: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** Base Variant Id */
+            base_variant_id?: string | null;
         };
     };
     responses: never;
@@ -6866,7 +6948,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TailorIn"];
+                "application/json": components["schemas"]["tracker__modules__resumes__schemas__TailorIn"];
             };
         };
         responses: {
@@ -10810,6 +10892,146 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tailor_api_v1_assistant_tailor_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["tracker__modules__assistant__router__TailorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    task_status_api_v1_assistant_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_tailored_api_v1_assistant_tailored__variant_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                variant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tailored_pdf_api_v1_assistant_tailored__variant_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                variant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

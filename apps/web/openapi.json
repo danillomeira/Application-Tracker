@@ -2015,7 +2015,7 @@
      "content": {
       "application/json": {
        "schema": {
-        "$ref": "#/components/schemas/TailorIn"
+        "$ref": "#/components/schemas/tracker__modules__resumes__schemas__TailorIn"
        }
       }
      },
@@ -8023,6 +8023,250 @@
          "additionalProperties": true,
          "title": "Response Submitted Api V1 Assistant Submitted Post"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tailor": {
+   "post": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Tailor",
+    "description": "Gera o CV sob medida para a vaga (IA + validador de fatos). Acompanhe em GET /assistant/tasks/{id}.",
+    "operationId": "tailor_api_v1_assistant_tailor_post",
+    "parameters": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/tracker__modules__assistant__router__TailorIn"
+       }
+      }
+     }
+    },
+    "responses": {
+     "202": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "string"
+         },
+         "title": "Response Tailor Api V1 Assistant Tailor Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tasks/{task_id}": {
+   "get": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Task Status",
+    "operationId": "task_status_api_v1_assistant_tasks__task_id__get",
+    "parameters": [
+     {
+      "name": "task_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Task Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Task Status Api V1 Assistant Tasks  Task Id  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tailored/{variant_id}/approve": {
+   "post": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Approve Tailored",
+    "description": "Voc\u00ea revisou e aprova o CV sob medida: ele passa a ser o anexado nesta vaga.",
+    "operationId": "approve_tailored_api_v1_assistant_tailored__variant_id__approve_post",
+    "parameters": [
+     {
+      "name": "variant_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Variant Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Approve Tailored Api V1 Assistant Tailored  Variant Id  Approve Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/v1/assistant/tailored/{variant_id}/pdf": {
+   "get": {
+    "tags": [
+     "assistant"
+    ],
+    "summary": "Tailored Pdf",
+    "operationId": "tailored_pdf_api_v1_assistant_tailored__variant_id__pdf_get",
+    "parameters": [
+     {
+      "name": "variant_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "uuid",
+       "title": "Variant Id"
+      }
+     },
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Authorization"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },
@@ -14077,32 +14321,6 @@
     ],
     "title": "SuggestIn"
    },
-   "TailorIn": {
-    "properties": {
-     "job_id": {
-      "type": "string",
-      "format": "uuid",
-      "title": "Job Id"
-     },
-     "base_variant_id": {
-      "anyOf": [
-       {
-        "type": "string",
-        "format": "uuid"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Base Variant Id"
-     }
-    },
-    "type": "object",
-    "required": [
-     "job_id"
-    ],
-    "title": "TailorIn"
-   },
    "TaskAccepted": {
     "properties": {
      "task_id": {
@@ -14792,6 +15010,20 @@
     ],
     "title": "EventOut"
    },
+   "tracker__modules__assistant__router__TailorIn": {
+    "properties": {
+     "job_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Job Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "job_id"
+    ],
+    "title": "TailorIn"
+   },
    "tracker__modules__calendar__router__EventOut": {
     "properties": {
      "id": {
@@ -15006,6 +15238,32 @@
      "last_used_at"
     ],
     "title": "AnswerOut"
+   },
+   "tracker__modules__resumes__schemas__TailorIn": {
+    "properties": {
+     "job_id": {
+      "type": "string",
+      "format": "uuid",
+      "title": "Job Id"
+     },
+     "base_variant_id": {
+      "anyOf": [
+       {
+        "type": "string",
+        "format": "uuid"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Base Variant Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "job_id"
+    ],
+    "title": "TailorIn"
    }
   }
  }

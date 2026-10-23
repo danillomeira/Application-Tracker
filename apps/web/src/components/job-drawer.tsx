@@ -22,8 +22,8 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { CompanyLogo, TechIcons } from "@/components/brand";
 import { formatSalary, type JobRow } from "@/components/job-card";
-import { Badge, Button, ScoreRing, useDialog } from "@/components/ui";
-import { useGet, useSend } from "@/lib/hooks";
+import { Badge, Button, buttonVariants, ScoreRing, useDialog } from "@/components/ui";
+import { useGet, useSend, useTask } from "@/lib/hooks";
 import { QUADRANT_LABEL, QUADRANT_TONE, SENIORITY_LABEL, STATUS_LABEL, WORK_MODEL_LABEL } from "@/lib/labels";
 import { isApplied } from "@/lib/job-actions";
 import { cn, formatDate, relativeTime } from "@/lib/utils";
@@ -87,7 +87,8 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
     ...inv,
   });
   const skip = useSend("POST", `/api/v1/jobs/${job.id}/skip`, { success: "Vaga descartada", ...inv });
-  const tailor = useSend("POST", `/api/v1/jobs/${job.id}/approve`, { success: "Preparando currículo sob medida: aparece em Currículos", ...inv });
+  const tailor = useSend<{ job_id: string }, { task_id: string }>("POST", "/api/v1/resumes/variants/tailored");
+  const tailorTask = useTask();
   const fb = useSend<{ verdict: string }>("POST", `/api/v1/jobs/${job.id}/feedback`, { success: "Obrigado: isso ajusta as próximas notas" });
   const [opened, setOpened] = useState(false);
   const link = j.apply_url || j.canonical_url;
@@ -145,10 +146,8 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
                   <div className="flex-1">
                     <p className="text-sm">Abra a vaga no site da empresa e candidate-se por lá.</p>
                     {link ? (
-                      <a href={link} target="_blank" rel="noreferrer" onClick={() => setOpened(true)}>
-                        <Button size="lg" className="mt-2 w-full">
-                          <ExternalLink size={16} /> Abrir a vaga no site
-                        </Button>
+                      <a href={link} target="_blank" rel="noreferrer" onClick={() => setOpened(true)} className={buttonVariants({ size: "lg", className: "mt-2 w-full" })}>
+                        <ExternalLink size={16} /> Abrir a vaga no site
                       </a>
                     ) : (
                       <p className="mt-1 text-xs text-warning">Esta vaga não tem link. Procure pelo título no site da empresa.</p>
@@ -186,12 +185,34 @@ function DrawerBody({ job, onClose }: { job: JobRow; onClose: () => void }) {
                 >
                   <X size={14} /> Não tenho interesse
                 </Button>
-                <Button variant="ghost" size="sm" disabled={tailor.isPending} onClick={() => tailor.mutate(undefined)} title="A IA monta um currículo ajustado para esta vaga">
-                  <FileText size={14} /> Gerar currículo sob medida
-                </Button>
               </div>
             </>
           )}
+        </div>
+
+        {/* Currículo para a vaga: sempre disponível (antes ou depois de se candidatar) */}
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border p-4">
+          <FileText size={18} className="text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Currículo para esta vaga</p>
+            <p className="text-xs text-muted-foreground">
+              {tailorTask.running
+                ? `${tailorTask.progress?.message ?? "Gerando"}… (1 a 3 minutos)`
+                : "A IA adapta o seu CV a esta vaga, só com fatos do seu currículo. Você revisa e aprova em Currículos; a extensão anexa o aprovado."}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            disabled={tailorTask.running || tailor.isPending}
+            onClick={async () => {
+              try {
+                tailorTask.start((await tailor.mutateAsync({ job_id: job.id })).task_id);
+              } catch {}
+            }}
+          >
+            {tailorTask.running ? "Gerando…" : "Gerar currículo"}
+          </Button>
+          <Link href="/curriculos" className="text-xs font-medium text-primary hover:underline">Ver em Currículos</Link>
         </div>
 
         {s && (

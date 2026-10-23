@@ -274,3 +274,40 @@ async def test_panel_stays_usable_over_site_modal(servers, session, tmp_path) ->
             await panel.get_by_text("Assistente").first.wait_for(timeout=5000)
         finally:
             await ctx.close()
+
+
+async def test_fields_labelled_by_nearby_text_not_placeholder(servers, session, tmp_path) -> None:
+    """ATS sem <label>: rótulo em <div> acima e placeholder "Enter"/"Search". O assistente usa o texto de verdade."""
+    await _seed(session, servers)
+    page_url = f"{servers['web']}/generic_labels.html"
+    await job_service.upsert_job(
+        session,
+        RawJob(source="browser", external_id="g1", title="Senior Full Stack Developer", company_name="Globex", url=page_url,
+               description_text="Python Vue", apply_url=page_url),
+    )  # fmt: skip
+    await session.commit()
+    async with async_playwright() as p:
+        ctx = await p.chromium.launch_persistent_context(
+            str(tmp_path / "profile4"),
+            headless=False,
+            args=["--headless=new", f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
+        )
+        try:
+            sw = ctx.service_workers[0] if ctx.service_workers else await ctx.wait_for_event("serviceworker")
+            await sw.evaluate(
+                "cfg => Promise.all([chrome.storage.sync.set(cfg.sync), chrome.storage.local.set({ token: cfg.token })])",
+                {"sync": {"apiUrl": servers["api"], "enabled": True, "ignoredDomains": []}, "token": TOKEN},
+            )
+            page = await ctx.new_page()
+            await page.goto(page_url)
+            await page.wait_for_function("document.getElementById('a1').value === 'Ana'", timeout=15000)
+            assert await page.input_value("#a2") == "Teste Silva"
+            assert await page.input_value("#a3") == "ana@example.com"
+            assert "linkedin.com/in/ana-teste" in await page.input_value("#a5")
+            assert await page.evaluate("document.getElementById('a4').files.length") == 1
+            await page.wait_for_function("window.picked === '5-7 years' || window.picked === '8+ years'", timeout=15000)
+            assert await page.input_value("#a7") == ""  # quem indicou: não inventa
+            panel = page.locator("#tracker-assistant")
+            assert await panel.get_by_text("Enter", exact=True).count() == 0  # nenhum campo chamado "Enter"
+        finally:
+            await ctx.close()

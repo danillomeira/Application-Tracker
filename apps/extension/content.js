@@ -119,22 +119,32 @@
     if (lb) { const t = lb.split(/\s+/).map((id) => txt(document.getElementById(id))).join(" ").trim(); if (t) return t; }
     if (el.id) { const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l && txt(l)) return txt(l); }
     const wrap = el.closest("label"); if (wrap && txt(wrap)) return txt(wrap);
-    const ph = el.getAttribute("placeholder");
-    if (ph && ph.length > 3 && !/^(ex|e\.g)[.:]/i.test(ph)) return ph.trim();
-    const fs = el.closest("fieldset"); const lg = fs?.querySelector("legend"); if (lg) return txt(lg);
-    // procura o texto mais próximo acima (formulários sem <label>)
+    const ph = (el.getAttribute("placeholder") || "").trim();
+    const usefulPh = ph.length > 3 && !GENERIC_PH.test(ph) && !/^(ex|e\.g)[.:]/i.test(ph);
+    if (usefulPh && ph.split(/\s+/).length >= 2) return ph; // "Your LinkedIn URL" diz o que é; "Enter" não
+    const fs = el.closest("fieldset"); const lg = fs?.querySelector("legend"); if (lg && txt(lg)) return txt(lg);
+    // procura o texto mais próximo acima (formulários sem <label>: muitos ATS usam <div>/<span> como rótulo)
     let node = el;
-    for (let depth = 0; depth < 4 && node; depth++) {
+    for (let depth = 0; depth < 6 && node && node !== document.body; depth++) {
       let prev = node.previousElementSibling;
       while (prev) {
-        const t = txt(prev);
-        if (t && t.length < 220 && !prev.matches("input,select,textarea,button")) return t;
+        const cls = typeof prev.className === "string" ? prev.className : "";
+        // pula partes do próprio dropdown (placeholder, valor escolhido, ícones) e blocos de outros campos
+        const widget = /(placeholder|single-?value|multi-?value|indicator|menu|option|select__|-control)/i.test(cls);
+        if (!widget && !prev.matches("input,select,textarea,button,script,style") && !prev.querySelector("input,select,textarea")) {
+          const t = txt(prev);
+          if (t && t.length < 300 && !GENERIC_PH.test(t)) return t;
+        }
         prev = prev.previousElementSibling;
       }
       node = node.parentElement;
     }
-    return ph || el.name || "";
+    return (usefulPh ? ph : "") || humanName(el.name || el.id || "");
   }
+  // placeholders que não dizem nada sobre o campo
+  const GENERIC_PH = /^(enter|search|select|choose|type( here)?|type your answer|enter your answer|your answer|digite( aqui)?|digite sua resposta( aqui)?|selecione|escolha|buscar|pesquisar|procurar|sua resposta|start typing|\.{3}|-+)\.?…?$/i;
+  /** "first_name" → "first name" (último recurso para campos sem rótulo nenhum). */
+  const humanName = (s) => (/^[a-z][\w-]*$/i.test(s) && !/^(input|field|react-select|trk)\d*/i.test(s) ? s.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim() : "");
   function radioOptionLabel(r) {
     return txt(r.id ? document.querySelector(`label[for="${CSS.escape(r.id)}"]`) : null) || txt(r.closest("label")) || r.getAttribute("aria-label") || r.value;
   }
@@ -187,7 +197,7 @@
       }
       const kind = kindOf(el);
       const label = labelFor(el);
-      if (!label) return;
+      if (!label || GENERIC_PH.test(label)) return;
       const key = keyOf(el);
       els.set(key, el);
       const options = kind === "select" ? [...el.options].filter((o) => o.value && !/^(select|selecione|escolha|--)/i.test(o.text.trim())).map((o) => o.text.trim()) : [];

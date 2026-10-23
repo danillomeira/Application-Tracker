@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from tests import factories
 from tracker.core import settings_store
+from tracker.integrations import job_sources
 from tracker.integrations.claude.client import FakeAIClient
 from tracker.modules.applications.models import Application
 from tracker.modules.assistant import service
@@ -16,6 +17,7 @@ from tracker.modules.assistant.router import linkedin_search_url
 from tracker.modules.jobs import service as job_service
 from tracker.modules.jobs.models import SavedSearch
 from tracker.modules.jobs.normalize import RawJob
+from tracker.modules.jobs.tasks import run_saved_search
 from tracker.modules.profile.models import AnswerBankEntry
 
 H = {"Authorization": "Extension tok"}
@@ -74,6 +76,51 @@ async def test_run_saved_search_returns_trackable_task_and_requeues_linkedin(
     assert dispatched[-1][0] == "ingest.run_saved_search"
     assert dispatched[-1][1]["search_id"] == str(search.id)
     assert "task_run_id" in dispatched[-1][1]
+
+
+async def test_saved_search_accepts_and_runs_configured_ats_sources(
+    client: AsyncClient, session, sessionmaker, monkeypatch
+) -> None:
+    response = await client.post(
+        "/api/v1/saved-searches",
+        json={
+            "name": "Go at Globex",
+            "query": "Go",
+            "sources": ["boards"],
+            "schedule_cron": "0 9 * * 1-5",
+            "filters": {"custom_sources": [{"name": "Globex", "url": "https://boards.greenhouse.io/globex"}]},
+        },
+    )
+    assert response.status_code == 201
+    assert "custom" in response.json()["sources"]
+    assert response.json()["filters"]["custom_sources"] == [
+        {"name": "Globex", "url": "https://boards.greenhouse.io/globex"}
+    ]
+
+    search = await session.get(SavedSearch, uuid.UUID(response.json()["id"]))
+    assert search is not None
+    calls: list[tuple[str, str]] = []
+
+    async def fake_greenhouse(token: str, company_name: str) -> list[RawJob]:
+        calls.append((token, company_name))
+        return []
+
+    monkeypatch.setitem(job_sources.FETCHERS, "greenhouse", fake_greenhouse)
+    result = await run_saved_search(sessionmaker, str(search.id))
+    assert calls == [("globex", "Globex")]
+    assert result["custom_sources"]["0:Globex"] == {"seen": 0, "created": 0}
+
+
+async def test_saved_search_rejects_unsupported_custom_site(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/saved-searches",
+        json={
+            "name": "Unsupported source",
+            "query": "Go",
+            "filters": {"custom_sources": [{"name": "Careers", "url": "https://careers.example.com/jobs"}]},
+        },
+    )
+    assert response.status_code == 422
 
 
 async def _auth(session) -> None:

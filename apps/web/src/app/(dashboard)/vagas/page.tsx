@@ -1,7 +1,7 @@
 "use client";
 
 import { CompanyLogo } from "@/components/brand";
-import { Briefcase, Search, SlidersHorizontal } from "lucide-react";
+import { Briefcase, Search, SlidersHorizontal, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -39,7 +39,13 @@ type Company = {
   is_blocked: boolean;
   last_polled_at: string | null;
 };
-type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; last_linkedin_run_at: string | null; filters: Record<string, unknown> };
+type SearchFilters = Record<string, unknown> & {
+  country?: string;
+  work_models?: string[];
+  boards?: string[];
+  custom_sources?: { name: string; url: string }[];
+};
+type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; last_linkedin_run_at: string | null; filters: SearchFilters };
 type SearchInput = { name: string; query: string; sources: string[]; schedule_cron: string; filters: Record<string, unknown> };
 
 export default function JobsPage() {
@@ -68,6 +74,10 @@ export default function JobsPage() {
 }
 
 function Discover() {
+  const boards = [
+    ["remotive", "Remotive"], ["remoteok", "RemoteOK"], ["himalayas", "Himalayas"], ["jobicy", "Jobicy"],
+    ["arbeitnow", "Arbeitnow"], ["workingnomads", "Working Nomads"], ["weworkremotely", "We Work Remotely"],
+  ];
   const [form, setForm] = useState({
     name: "",
     query: "",
@@ -75,8 +85,12 @@ function Discover() {
     workModel: "remote",
     sources: ["boards", "linkedin"],
     boards: ["remotive", "remoteok", "himalayas", "jobicy", "arbeitnow", "workingnomads", "weworkremotely"],
+    customSources: [] as { name: string; url: string }[],
     schedule_cron: "0 9,15 * * 1-5",
   });
+  const [customSourceName, setCustomSourceName] = useState("");
+  const [customSourceUrl, setCustomSourceUrl] = useState("");
+  const [selectedSearchId, setSelectedSearchId] = useState("");
   const queryClient = useQueryClient();
   const [openJob, setOpenJob] = useState<JobRow | null>(null);
   const { data: savedSearches } = useGet<Search[]>(["searches"], "/api/v1/saved-searches");
@@ -95,12 +109,23 @@ function Discover() {
     ["keyword-search-jobs", jobParams.toString()],
     form.query.trim() ? `/api/v1/jobs?${jobParams}` : null,
   );
-  const boards = [
-    ["remotive", "Remotive"], ["remoteok", "RemoteOK"], ["himalayas", "Himalayas"], ["jobicy", "Jobicy"],
-    ["arbeitnow", "Arbeitnow"], ["workingnomads", "Working Nomads"], ["weworkremotely", "We Work Remotely"],
-  ];
   const toggle = (items: string[], item: string) =>
     items.includes(item) ? items.filter((value) => value !== item) : [...items, item];
+  const addCustomSource = () => {
+    const name = customSourceName.trim();
+    const url = customSourceUrl.trim();
+    if (!name || !url) {
+      toast.error("Informe o nome do site e a URL do board de vagas.");
+      return;
+    }
+    setForm({
+      ...form,
+      customSources: [...form.customSources, { name, url }],
+      sources: form.sources.includes("custom") ? form.sources : [...form.sources, "custom"],
+    });
+    setCustomSourceName("");
+    setCustomSourceUrl("");
+  };
   const searchNow = async () => {
     const query = form.query.trim();
     const payload: SearchInput = {
@@ -112,12 +137,15 @@ function Discover() {
         ...(form.country.trim() && { country: form.country.trim() }),
         ...(form.workModel && { work_models: [form.workModel] }),
         ...(form.sources.includes("boards") && { boards: form.boards }),
+        ...(form.customSources.length > 0 && { custom_sources: form.customSources }),
       },
     };
-    const existing = savedSearches?.find((search) => search.name === payload.name);
+    const existing = savedSearches?.find((search) => search.id === selectedSearchId)
+      ?? savedSearches?.find((search) => search.name === payload.name);
     const saved = existing
       ? await update.mutateAsync({ id: existing.id, body: payload })
       : await create.mutateAsync(payload);
+    setSelectedSearchId(saved.id);
     const queued = await run.mutateAsync(saved.id);
     task.start(queued.task_id);
   };
@@ -130,6 +158,33 @@ function Discover() {
             Digite palavras-chave para filtrar as sugestões existentes ou buscar novas vagas nas fontes escolhidas.
           </p>
         </div>
+        <Field label="Editar uma busca salva">
+          <Select
+            value={selectedSearchId}
+            onChange={(e) => {
+              const selected = savedSearches?.find((search) => search.id === e.target.value);
+              setSelectedSearchId(e.target.value);
+              if (!selected) return;
+              setForm({
+                name: selected.name,
+                query: selected.query,
+                country: selected.filters.country ?? "",
+                workModel: selected.filters.work_models?.[0] ?? "",
+                sources: selected.sources,
+                boards: selected.filters.boards ?? [
+                  "remotive", "remoteok", "himalayas", "jobicy", "arbeitnow", "workingnomads", "weworkremotely",
+                ],
+                customSources: selected.filters.custom_sources ?? [],
+                schedule_cron: selected.schedule_cron,
+              });
+              setCustomSourceName("");
+              setCustomSourceUrl("");
+            }}
+          >
+            <option value="">Nova busca</option>
+            {savedSearches?.map((search) => <option key={search.id} value={search.id}>{search.name}</option>)}
+          </Select>
+        </Field>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Palavras-chave"><Input placeholder="Ex.: desenvolvedor backend Go" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} /></Field>
           <Field label="País ou localização"><Input placeholder="United States" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></Field>
@@ -146,15 +201,53 @@ function Discover() {
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("boards")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "boards") })} /> Sites públicos</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("linkedin")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "linkedin") })} /> LinkedIn (extensão local)</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("custom")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "custom") })} /> Meus sites</label>
           </div>
           {form.sources.includes("boards") && (
             <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
               {boards.map(([id, label]) => <label key={id} className="flex items-center gap-2"><input type="checkbox" checked={form.boards.includes(id)} onChange={() => setForm({ ...form, boards: toggle(form.boards, id) })} />{label}</label>)}
             </div>
           )}
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-sm font-medium">Adicionar site de vagas</p>
+            <p className="text-xs text-muted-foreground">
+              Cole o link público do board Greenhouse, Lever, Ashby ou Gupy. Ex.: https://jobs.lever.co/empresa.
+              Sites genéricos ainda não são suportados.
+            </p>
+            <div className="grid gap-2 md:grid-cols-[1fr_2fr_auto]">
+              <Input placeholder="Nome da empresa ou site" value={customSourceName} onChange={(e) => setCustomSourceName(e.target.value)} />
+              <Input type="url" placeholder="https://boards.greenhouse.io/empresa" value={customSourceUrl} onChange={(e) => setCustomSourceUrl(e.target.value)} />
+              <Button type="button" variant="outline" onClick={addCustomSource}>Adicionar</Button>
+            </div>
+            {form.customSources.length > 0 && (
+              <ul className="space-y-1">
+                {form.customSources.map((source, index) => (
+                  <li key={`${source.url}-${index}`} className="flex items-center gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{source.name} <span className="text-muted-foreground">· {source.url}</span></span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Remover fonte ${source.name}`}
+                      onClick={() => {
+                        const customSources = form.customSources.filter((_, i) => i !== index);
+                        setForm({
+                          ...form,
+                          customSources,
+                          sources: customSources.length ? form.sources : form.sources.filter((source) => source !== "custom"),
+                        });
+                      }}
+                    >
+                      <X size={14} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!form.query.trim() || !form.sources.length || (form.sources.includes("boards") && !form.boards.length) || task.running || create.isPending || update.isPending || run.isPending} onClick={() => void searchNow()}>
+          <Button disabled={!form.query.trim() || !form.sources.length || (form.sources.includes("boards") && !form.boards.length) || (form.sources.includes("custom") && !form.customSources.length) || task.running || create.isPending || update.isPending || run.isPending} onClick={() => void searchNow()}>
             {task.running ? "Buscando vagas…" : "Buscar vagas agora"}
           </Button>
           {task.progress && <span className="text-sm text-muted-foreground">{task.progress.message} ({task.progress.pct}%)</span>}

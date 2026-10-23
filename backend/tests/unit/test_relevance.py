@@ -119,5 +119,28 @@ def test_saved_search_filters_country_alias_and_work_model() -> None:
         work_model="remote",
     )
     assert matches_saved_search_filters(raw, {"country": "United States", "work_models": ["remote"]})
+    assert matches_saved_search_filters(raw, {"country": "USA"})
+    assert matches_saved_search_filters(
+        RawJob(source="x", external_id="2", title="Backend", company_name="X", location="Worldwide"),
+        {"country": "United States"},
+    )
     assert not matches_saved_search_filters(raw, {"country": "Canada"})
     assert not matches_saved_search_filters(raw, {"work_models": ["onsite"]})
+    assert not matches_saved_search_filters(
+        RawJob(source="x", external_id="3", title="Backend", company_name="X", location="Remote"),
+        {"country": "United States"},
+    )
+    assert not matches_saved_search_filters(
+        RawJob(source="x", external_id="4", title="Backend", company_name="X", location="Brazil"),
+        {"work_models": ["remote"]},
+    )
+    assert matches_saved_search_filters(
+        RawJob(
+            source="x",
+            external_id="5",
+            title="Backend",
+            company_name="X",
+            description_text="Work remotely from any location.",
+        ),
+        {"work_models": ["remote"]},
+    )

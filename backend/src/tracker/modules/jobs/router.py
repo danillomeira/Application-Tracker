@@ -9,7 +9,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import Text, and_, case, exists, func, select
+from sqlalchemy import Text, and_, case, exists, func, or_, select
 
 from tracker.api.deps import SessionDep, TaskAccepted, get_or_404
 from tracker.core import audit
@@ -106,7 +106,20 @@ async def list_jobs(
     if apply_kind:
         stmt = stmt.where(Job.apply_kind.in_(apply_kind))
     if location:
-        stmt = stmt.where(Job.location.ilike(f"%{location}%"))
+        location_terms = [Job.location.ilike(f"%{location}%")]
+        from tracker.modules.jobs import relevance
+
+        aliases = relevance.country_aliases(location)
+        for alias in aliases:
+            if alias == "us":
+                location_terms.append(
+                    Job.location.op("~*")(r"(^|[^a-zA-Z])us([^a-zA-Z]|$)")
+                )
+            else:
+                location_terms.append(Job.location.ilike(f"%{alias}%"))
+        if aliases:
+            location_terms.extend(Job.location.ilike(f"%{term}%") for term in ("worldwide", "global", "anywhere"))
+        stmt = stmt.where(or_(*location_terms))
     monthly = monthly_salary_expr()
     if with_salary or salary_min is not None:
         stmt = stmt.where(monthly.is_not(None))

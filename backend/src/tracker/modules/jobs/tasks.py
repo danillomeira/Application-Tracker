@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -182,22 +181,18 @@ def matches_query(job: Job, query: str, filters: dict[str, Any]) -> bool:
 
 
 def matches_saved_search_filters(raw: nz.RawJob, filters: dict[str, Any]) -> bool:
+    from tracker.modules.jobs import relevance
+
     country = str(filters.get("country") or "").strip().casefold()
-    location = (raw.location or "").casefold()
-    aliases = {
-        "united states": ("united states", "usa", "us"),
-        "usa": ("united states", "usa", "us"),
-        "us": ("united states", "usa", "us"),
-    }
-    country_terms = aliases.get(country, (country,))
-    country_matches = any(
-        re.search(rf"(?<![a-z]){re.escape(term)}(?![a-z])", location) for term in country_terms if term
-    )
-    global_location = any(term in location for term in ("worldwide", "global", "anywhere"))
-    if country and location and not country_matches and not global_location:
+    if country and not relevance.location_matches_country(raw.location, country):
         return False
     work_models = filters.get("work_models") or []
-    return not (work_models and raw.work_model and raw.work_model not in work_models)
+    if work_models:
+        work_model = raw.work_model or nz.detect_work_model(
+            f"{raw.title}\n{raw.location or ''}\n{raw.description_text or ''}"
+        )
+        return work_model in work_models
+    return True
 
 
 def _cron_field(spec: str, value: int, lo: int, hi: int) -> bool:
@@ -296,6 +291,37 @@ async def run_saved_search(sm: SM, search_id: str) -> dict[str, Any]:
             await _health(sm, f"board:{name}", None)
             boards[name] = await ingest_raw(sm, raws, saved_search_id=uuid.UUID(search_id))
         result["boards"] = boards
+    if "custom" in sources:
+        from tracker.modules.jobs import relevance
+
+        custom_results: dict[str, Any] = {}
+        for index, source in enumerate(filters.get("custom_sources") or []):
+            name = str(source["name"]).strip()
+            parsed = job_sources.parse_ats_url(str(source["url"]))
+            if parsed is None:
+                raise ValueError(f"URL inválida ou fonte não suportada: {source['url']}")
+            ats, token, _ = parsed
+            fetcher = job_sources.FETCHERS.get(ats)
+            if fetcher is None:
+                raise ValueError(f"Fonte personalizada não suportada: {ats}")
+            key = f"{index}:{name}"
+            health_name = f"custom:{ats}:{index}"
+            try:
+                raws = await fetcher(token, name)
+                raws = relevance.filter_relevant(
+                    raws,
+                    relevance.split_terms(query),
+                    brazilian_company=None if filters.get("country") else False,
+                    search_in_description=True,
+                )
+                raws = [raw for raw in raws if matches_saved_search_filters(raw, filters)]
+            except (httpx.HTTPError, ValueError) as exc:
+                await _health(sm, health_name, str(exc))
+                custom_results[key] = f"erro: {str(exc)[:80]}"
+                continue
+            await _health(sm, health_name, None)
+            custom_results[key] = await ingest_raw(sm, raws, saved_search_id=uuid.UUID(search_id))
+        result["custom_sources"] = custom_results
     async with sm() as s:
         jobs = (await s.scalars(select(Job).where(Job.status == "open"))).all()
         matched = [j for j in jobs if matches_query(j, query, filters)]

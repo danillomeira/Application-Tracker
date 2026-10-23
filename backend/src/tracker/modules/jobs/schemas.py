@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from tracker.integrations import job_sources
+
 
 class XSalary(BaseModel):
     min: float | None = None
@@ -121,6 +123,11 @@ class FeedbackIn(BaseModel):
     reason: str | None = None
 
 
+class CustomJobSource(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class SavedSearchIn(BaseModel):
     name: str
     query: str
@@ -128,6 +135,25 @@ class SavedSearchIn(BaseModel):
     sources: list[str] = Field(default_factory=lambda: ["monitored"])
     schedule_cron: str = "0 9,15 * * 1-5"
     is_active: bool = True
+
+    @model_validator(mode="after")
+    def validate_custom_sources(self) -> SavedSearchIn:
+        raw_sources = self.filters.get("custom_sources", [])
+        if not isinstance(raw_sources, list):
+            raise ValueError("filters.custom_sources deve ser uma lista")
+        custom_sources = [CustomJobSource.model_validate(source) for source in raw_sources]
+        for source in custom_sources:
+            parsed = job_sources.parse_ats_url(source.url)
+            if parsed is None or parsed[0] not in job_sources.FETCHERS:
+                raise ValueError(
+                    f"Fonte personalizada não suportada: {source.url}. "
+                    "Use um board público Greenhouse, Lever, Ashby ou Gupy."
+                )
+        if custom_sources:
+            self.filters["custom_sources"] = [source.model_dump() for source in custom_sources]
+            if "custom" not in self.sources:
+                self.sources.append("custom")
+        return self
 
 
 class SavedSearchOut(SavedSearchIn):

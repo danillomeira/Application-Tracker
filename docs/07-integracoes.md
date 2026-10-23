@@ -77,6 +77,8 @@ Descoberta do token: o usuário informa ao adicionar a empresa, ou o sistema det
 
 Frequência: 1x a cada 6 h por empresa, com `ETag`/`If-Modified-Since` quando suportado.
 
+Em **Vagas → Buscar vagas**, o usuário também pode adicionar boards próprios colando a URL pública. A busca reconhece boards Greenhouse (`boards.greenhouse.io`), Lever (`jobs.lever.co`), Ashby (`jobs.ashbyhq.com`) e Gupy (`*.gupy.io`), extrai o identificador da empresa e usa as APIs públicas acima. Páginas de carreira genéricas e URLs de ATS não suportados são rejeitadas; não fazemos scraping arbitrário de sites.
+
 ## 4. Claude API
 Ver `08-ia-claude.md`. SDK oficial `anthropic` (Python), sempre via `integrations/claude/client.py`.
 

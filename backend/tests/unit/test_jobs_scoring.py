@@ -47,6 +47,9 @@ def test_parse_ats_url() -> None:
     assert job_sources.parse_ats_url("https://jobs.lever.co/initech/abc-123") == ("lever", "initech", "abc-123")
     assert job_sources.parse_ats_url("https://empresa.gupy.io/jobs/123") == ("gupy", "empresa", "123")
     assert job_sources.parse_ats_url("https://www.linkedin.com/jobs/view/1") is None
+    assert job_sources.parse_ats_url("https://evil.example/jobs.lever.co/initech") is None
+    assert job_sources.parse_ats_url("http://jobs.lever.co/initech") is None
+    assert job_sources.parse_ats_url("https://user@jobs.lever.co/initech") is None
 
 
 @pytest.mark.parametrize(

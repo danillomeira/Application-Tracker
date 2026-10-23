@@ -51,6 +51,38 @@ def search_variants(query: str) -> list[str]:
     return [query]
 
 
+def country_aliases(country: str) -> tuple[str, ...]:
+    normalized = normalize_title(country)
+    aliases = {
+        "united states": ("united states", "united states of america", "usa", "us"),
+        "united states of america": ("united states", "united states of america", "usa", "us"),
+        "usa": ("united states", "united states of america", "usa", "us"),
+        "us": ("united states", "united states of america", "usa", "us"),
+    }
+    return aliases.get(normalized, ())
+
+
+def location_matches_country(location: str | None, country: str) -> bool:
+    normalized_location = normalize_title(location or "")
+    if not normalized_location:
+        return False
+    if any(
+        re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", normalized_location)
+        for alias in country_aliases(country)
+    ):
+        return True
+    if country_aliases(country):
+        return any(
+            re.search(rf"(?<![a-z0-9]){term}(?![a-z0-9])", normalized_location)
+            for term in ("worldwide", "global", "anywhere")
+        )
+    normalized_country = normalize_title(country)
+    return bool(
+        normalized_country
+        and re.search(rf"(?<![a-z0-9]){re.escape(normalized_country)}(?![a-z0-9])", normalized_location)
+    )
+
+
 async def terms(session: AsyncSession) -> list[str]:
     prefs = await profile_service.get_preferences(session)
     out: list[str] = [normalize_title(r) for r in prefs.target_roles]

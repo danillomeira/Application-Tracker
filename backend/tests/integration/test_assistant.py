@@ -10,11 +10,42 @@ from tracker.core import settings_store
 from tracker.integrations.claude.client import FakeAIClient
 from tracker.modules.applications.models import Application
 from tracker.modules.assistant import service
+from tracker.modules.assistant.router import linkedin_search_url
 from tracker.modules.jobs import service as job_service
+from tracker.modules.jobs.models import SavedSearch
 from tracker.modules.jobs.normalize import RawJob
 from tracker.modules.profile.models import AnswerBankEntry
 
 H = {"Authorization": "Extension tok"}
+
+
+def test_linkedin_search_url_includes_independent_location_and_remote_filters() -> None:
+    url = linkedin_search_url("backend Go", {"country": "United States", "work_models": ["remote"]})
+    assert "keywords=backend+Go" in url
+    assert "location=United+States" in url
+    assert "f_WT=2" in url
+
+
+async def test_linkedin_discovery_claims_scheduled_search_once(anon_client: AsyncClient, session) -> None:
+    await _auth(session)
+    search = SavedSearch(
+        name="Backend US",
+        query="backend Go",
+        filters={"country": "United States", "work_models": ["remote"]},
+        sources=["linkedin"],
+        schedule_cron="0 0 * * *",
+        is_active=True,
+    )
+    session.add(search)
+    await session.commit()
+
+    first = await anon_client.get("/api/v1/assistant/discovery/due", headers=H)
+    second = await anon_client.get("/api/v1/assistant/discovery/due", headers=H)
+    assert first.status_code == 200
+    assert len(first.json()) == 1
+    assert first.json()[0]["id"] == str(search.id)
+    assert "location=United+States" in first.json()[0]["url"]
+    assert second.json() == []
 
 
 async def _auth(session) -> None:

@@ -5,7 +5,9 @@
   "description": "Avalia a vaga enquanto você navega, preenche formulários sozinho com seu perfil e CV, completa perguntas abertas com IA e registra suas candidaturas.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"

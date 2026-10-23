@@ -22,6 +22,7 @@ class SavedSearch(IdMixin, TimestampMixin, Base):
     schedule_cron: Mapped[str] = mapped_column(Text, default="0 9,15 * * 1-5")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_linkedin_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Job(IdMixin, TimestampMixin, Base):

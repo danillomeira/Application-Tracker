@@ -19,6 +19,7 @@
     cfg: null, card: null, pageInfo: null, fields: [], status: new Map(), edits: new Map(), reported: false,
     busy: false, msg: "", minimized: false, logo: null, linkedinList: [],
   };
+  let linkedinDiscoveryRunning = false;
 
   // ---------------- comunicação ----------------
   const bg = (msg) => new Promise((resolve, reject) => chrome.runtime.sendMessage(msg, (r) => (r?.ok ? resolve(r.data) : reject(new Error(r?.error || "sem resposta")))));
@@ -687,6 +688,25 @@
     state.cfg = await bg({ type: "config" }).catch(() => null);
     if (!state.cfg?.enabled || !state.cfg.token) return;
     if ((state.cfg.ignoredDomains || []).some((d) => location.host.includes(d))) return;
+    if (IS_TOP && isLinkedinSearch()) {
+      const discovery = await bg({ type: "linkedinDiscoveryInfo" }).catch(() => null);
+      if (discovery && !linkedinDiscoveryRunning) {
+        linkedinDiscoveryRunning = true;
+        let jobs = [];
+        for (let attempt = 0; attempt < 30 && !jobs.length; attempt++) {
+          jobs = scrapeLinkedin();
+          if (!jobs.length) await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        try {
+          if (!jobs.length) throw new Error("nenhuma vaga visível; verifique se a sessão do LinkedIn está conectada");
+          await api("POST", "/import-list", { source: "linkedin", jobs });
+          await bg({ type: "linkedinDiscoveryComplete" });
+        } catch (error) {
+          await bg({ type: "linkedinDiscoveryComplete", error: error.message });
+        }
+        return;
+      }
+    }
     if (!wired) {
       wired = true;
       document.addEventListener("focusin", onFocus, true);

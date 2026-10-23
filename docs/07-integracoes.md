@@ -36,18 +36,20 @@ Autorização incremental: login primeiro; Gmail e Calendar quando o usuário co
 
 ## 2. LinkedIn (agente local)
 
-**Não existe API oficial para busca de vagas ou candidatura.** Toda interação acontece no agente local com Playwright e o perfil de navegador do usuário (detalhes em `09-motor-candidatura.md`).
+**Não existe API oficial para busca de vagas ou candidatura.** A extensão local do navegador executa buscas agendadas em abas não ativas, usando a sessão do LinkedIn já autenticada pelo usuário. Ela lê apenas os cartões visíveis na página de resultados e importa as vagas no tracker; não envia candidaturas, não contorna login, CAPTCHA ou bloqueios, e não tenta ocultar a automação. O navegador precisa permanecer aberto e conectado.
 
 | Função | Como |
 |---|---|
-| Login | Manual pelo usuário, uma vez, no navegador do agente (`tracker-agent login linkedin`). Sessão salva no perfil persistente |
-| Busca de vagas | Abrir a URL de busca com os filtros (`f_AL=true` para Easy Apply, `f_TPR=r86400` para 24 h, `f_WT` para modelo de trabalho), paginar com ritmo humano, extrair cartões e detalhes |
+| Login | Manual pelo usuário no navegador com a extensão instalada; a extensão reutiliza a sessão normal do LinkedIn |
+| Busca de vagas | Agenda configurável em **Vagas → Descobrir**; a extensão verifica buscas devidas e abre uma aba em segundo plano. País e modalidade remota são filtros separados |
 | Detalhe da vaga | Descrição, nº de candidatos, data, recrutador ("Conheça a equipe de contratação"), tipo de candidatura |
-| Easy Apply | Ver `09-motor-candidatura.md` |
+| Candidaturas | A descoberta não envia candidaturas; vagas encontradas aparecem como sugestões em Vagas para revisão manual |
 | Mensagens | Somente leitura das conversas novas, disparada por notificação no Gmail |
 | Perfil do usuário | Leitura para a otimização (RF-ANA-06) |
 
-Limites padrão (configuráveis em `limits`):
+Verificações da extensão ocorrem a cada 5 minutos, com no máximo uma busca por verificação, e a agenda da busca define quando uma consulta pode ser executada. Só os cartões presentes no carregamento inicial são importados; a extensão não pagina resultados automaticamente. Login vencido, ausência de resultados ou erro de importação geram indicação de erro no ícone da extensão. O usuário deve respeitar os termos do LinkedIn e pode desabilitar a fonte ou extensão a qualquer momento.
+
+Limites de candidatura (não aplicados à descoberta):
 | Item | Padrão |
 |---|---|
 | Candidaturas Easy Apply por dia | 20 |

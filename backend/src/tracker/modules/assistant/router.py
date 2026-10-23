@@ -6,7 +6,9 @@ import hashlib
 import hmac
 import secrets
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated, Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import Response
@@ -24,7 +26,7 @@ from tracker.modules.applications.models import ApplicationAnswer
 from tracker.modules.applications.resolver import FormField, resolve_core
 from tracker.modules.assistant import service
 from tracker.modules.jobs import service as job_service
-from tracker.modules.jobs.models import Job
+from tracker.modules.jobs.models import Job, SavedSearch
 from tracker.modules.jobs.normalize import RawJob, detect_language, normalize_title
 from tracker.modules.jobs.schemas import JobNormalized
 from tracker.modules.notifications.service import notify
@@ -48,6 +50,51 @@ async def assistant_auth(request: Request, session: SessionDep, authorization: A
 
 
 Auth = Annotated[str, Depends(assistant_auth)]
+
+
+def linkedin_search_url(query: str, filters: dict[str, Any]) -> str:
+    params: list[tuple[str, str]] = [("keywords", query)]
+    country = str(filters.get("country") or "").strip()
+    if country:
+        params.append(("location", country))
+    work_models = filters.get("work_models") or []
+    work_type = {"onsite": "1", "remote": "2", "hybrid": "3"}
+    selected = [work_type[value] for value in work_models if value in work_type]
+    if len(selected) == 1:
+        params.append(("f_WT", selected[0]))
+    return f"https://www.linkedin.com/jobs/search/?{urlencode(params)}"
+
+
+@router.get("/discovery/due")
+async def due_linkedin_discoveries(session: SessionDep, _auth: Auth) -> list[dict[str, str]]:
+    """Claim buscas LinkedIn agendadas para a extensão local."""
+    from tracker.modules.jobs.tasks import cron_due
+
+    now = datetime.now(UTC)
+    searches = (
+        await session.scalars(
+            select(SavedSearch)
+            .where(SavedSearch.is_active.is_(True))
+            .order_by(SavedSearch.created_at)
+            .with_for_update(skip_locked=True)
+        )
+    ).all()
+    due: list[dict[str, str]] = []
+    for search in searches:
+        if "linkedin" not in search.sources or not cron_due(search.schedule_cron, search.last_linkedin_run_at, now):
+            continue
+        search.last_linkedin_run_at = now
+        due.append(
+            {
+                "id": str(search.id),
+                "name": search.name,
+                "url": linkedin_search_url(search.query, search.filters),
+            }
+        )
+        break
+    if due:
+        await session.commit()
+    return due
 
 
 @router.post("/token")

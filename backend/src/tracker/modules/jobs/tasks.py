@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -180,6 +181,25 @@ def matches_query(job: Job, query: str, filters: dict[str, Any]) -> bool:
     return not (filters.get("seniorities") and job.seniority and job.seniority not in filters["seniorities"])
 
 
+def matches_saved_search_filters(raw: nz.RawJob, filters: dict[str, Any]) -> bool:
+    country = str(filters.get("country") or "").strip().casefold()
+    location = (raw.location or "").casefold()
+    aliases = {
+        "united states": ("united states", "usa", "us"),
+        "usa": ("united states", "usa", "us"),
+        "us": ("united states", "usa", "us"),
+    }
+    country_terms = aliases.get(country, (country,))
+    country_matches = any(
+        re.search(rf"(?<![a-z]){re.escape(term)}(?![a-z])", location) for term in country_terms if term
+    )
+    global_location = any(term in location for term in ("worldwide", "global", "anywhere"))
+    if country and location and not country_matches and not global_location:
+        return False
+    work_models = filters.get("work_models") or []
+    return not (work_models and raw.work_model and raw.work_model not in work_models)
+
+
 def _cron_field(spec: str, value: int, lo: int, hi: int) -> bool:
     for part in spec.split(","):
         step = 1
@@ -258,7 +278,10 @@ async def run_saved_search(sm: SM, search_id: str) -> dict[str, Any]:
             if fetch is None:
                 continue
             try:
-                raws = relevance.filter_relevant(await fetch(query), terms, brazilian_company=False)
+                raws = relevance.filter_relevant(
+                    await fetch(query), terms, brazilian_company=False, search_in_description=True
+                )
+                raws = [raw for raw in raws if matches_saved_search_filters(raw, filters)]
             except (httpx.HTTPError, ValueError) as exc:
                 await _health(sm, f"board:{name}", str(exc))
                 boards[name] = f"erro: {str(exc)[:80]}"

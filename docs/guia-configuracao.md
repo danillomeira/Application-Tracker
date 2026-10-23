@@ -219,6 +219,8 @@ Ela nunca envia nada sozinha.
 3. Clique no ícone 🧩 e **fixe** o Application Tracker.
 4. Botão direito no ícone → **Opções**: endereço da API `http://localhost:8000` e o token. Salve.
 
+Para descobrir vagas automaticamente, mantenha o navegador aberto e conectado ao LinkedIn. Em **Vagas → Descobrir**, selecione LinkedIn, configure localização, modalidade e agenda. A extensão abre no máximo uma busca em aba de segundo plano a cada 5 minutos quando houver buscas agendadas; os cartões visíveis são importados como sugestões, sem candidatura automática. Recarregue a extensão no gerenciador após atualizá-la.
+
 ---
 
 ## 8. Robô do LinkedIn (opcional, avançado)

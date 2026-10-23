@@ -85,12 +85,18 @@ def location_ok(location: str | None, brazilian_company: bool, international: bo
 
 
 def filter_relevant(
-    raws: list[RawJob], terms_: list[str], brazilian_company: bool | None = None, international: bool = True
+    raws: list[RawJob],
+    terms_: list[str],
+    brazilian_company: bool | None = None,
+    international: bool = True,
+    search_in_description: bool = False,
 ) -> list[RawJob]:
-    """Título bate com os termos, sem estágio/gestão e (se `brazilian_company` for informado) com local acessível do Brasil."""
+    """Filtra por termos, sem estágio/gestão e, se solicitado, por localização acessível."""
     out: list[RawJob] = []
     for r in raws:
-        if not matches(r.title, terms_) or EXCLUDED_TITLE.search(_fold(r.title)):
+        title_match = matches(r.title, terms_)
+        description_match = search_in_description and matches(r.description_text or "", terms_)
+        if not (title_match or description_match) or EXCLUDED_TITLE.search(_fold(r.title)):
             continue
         if brazilian_company is not None and not location_ok(r.location, brazilian_company, international):
             continue

@@ -6,6 +6,7 @@ import pytest
 
 from tracker.modules.jobs.normalize import RawJob, normalize_title
 from tracker.modules.jobs.relevance import filter_relevant, location_ok, matches
+from tracker.modules.jobs.tasks import matches_saved_search_filters
 
 TERMS = [normalize_title(t) for t in ["data engineer", "engenheiro de dados", "backend", "software engineer", "machine learning"]]
 
@@ -74,3 +75,30 @@ def test_title_match_and_exclusions() -> None:
     # sem informar a empresa, o local não é filtrado (ex.: importação manual)
     assert "Data Engineer" in [r.title for r in filter_relevant(raws, TERMS)]
     assert matches("Pessoa Engenheira de Software Sênior", [normalize_title("engenheira de software")])
+
+
+def test_saved_search_can_match_keywords_in_description() -> None:
+    raw = RawJob(
+        source="x",
+        external_id="1",
+        title="Backend Engineer",
+        company_name="X",
+        description_text="Build Go services for US customers.",
+    )
+    go = [normalize_title("Go")]
+    assert not filter_relevant([raw], go)
+    assert filter_relevant([raw], go, search_in_description=True) == [raw]
+
+
+def test_saved_search_filters_country_alias_and_work_model() -> None:
+    raw = RawJob(
+        source="x",
+        external_id="1",
+        title="Backend Engineer",
+        company_name="X",
+        location="Remote - US",
+        work_model="remote",
+    )
+    assert matches_saved_search_filters(raw, {"country": "United States", "work_models": ["remote"]})
+    assert not matches_saved_search_filters(raw, {"country": "Canada"})
+    assert not matches_saved_search_filters(raw, {"work_models": ["onsite"]})

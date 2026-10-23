@@ -38,10 +38,10 @@ type Company = {
   is_blocked: boolean;
   last_polled_at: string | null;
 };
-type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; filters: Record<string, unknown> };
+type Search = { id: string; name: string; query: string; sources: string[]; schedule_cron: string; is_active: boolean; last_run_at: string | null; last_linkedin_run_at: string | null; filters: Record<string, unknown> };
 
 export default function JobsPage() {
-  const [tab, setTab] = useState<"vagas" | "empresas" | "buscas">("vagas");
+  const [tab, setTab] = useState<"vagas" | "empresas" | "buscas" | "descobrir">("vagas");
   return (
     <div>
       <PageHeader
@@ -51,7 +51,7 @@ export default function JobsPage() {
         actions={<span data-tour="import"><ImportButton /></span>}
       />
       <div data-tour="tabs" className="inline-block">
-        <Tabs value={tab} onChange={setTab} items={[{ value: "vagas", label: "Vagas" }, { value: "empresas", label: "Empresas monitoradas" }, { value: "buscas", label: "Buscas salvas" }]} />
+        <Tabs value={tab} onChange={setTab} items={[{ value: "vagas", label: "Vagas" }, { value: "descobrir", label: "Descobrir" }, { value: "empresas", label: "Empresas monitoradas" }, { value: "buscas", label: "Buscas salvas" }]} />
       </div>
       {tab === "vagas" && (
         <Suspense fallback={<Skeleton className="h-96" />}>
@@ -60,6 +60,93 @@ export default function JobsPage() {
       )}
       {tab === "empresas" && <Companies />}
       {tab === "buscas" && <Searches />}
+      {tab === "descobrir" && <Discover />}
+    </div>
+  );
+}
+
+function Discover() {
+  const [form, setForm] = useState({
+    name: "",
+    query: "",
+    country: "",
+    workModel: "remote",
+    sources: ["boards", "linkedin"],
+    boards: ["remotive", "remoteok", "himalayas", "jobicy", "arbeitnow", "workingnomads", "weworkremotely"],
+    schedule_cron: "0 9,15 * * 1-5",
+  });
+  const [openJob, setOpenJob] = useState<JobRow | null>(null);
+  const create = useSend("POST", "/api/v1/saved-searches", { success: "Busca de descoberta salva", invalidate: [["searches"]] });
+  const suggestions = useGet<JobRow[]>(["discovery-suggestions"], "/api/v1/jobs?status=open&triage=new&sort=recent&limit=12");
+  const boards = [
+    ["remotive", "Remotive"], ["remoteok", "RemoteOK"], ["himalayas", "Himalayas"], ["jobicy", "Jobicy"],
+    ["arbeitnow", "Arbeitnow"], ["workingnomads", "Working Nomads"], ["weworkremotely", "We Work Remotely"],
+  ];
+  const toggle = (items: string[], item: string) =>
+    items.includes(item) ? items.filter((value) => value !== item) : [...items, item];
+  return (
+    <div className="space-y-5">
+      <Card className="space-y-4">
+        <div>
+          <h2 className="font-semibold">Configure sua busca</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Fontes públicas são consultadas pelo servidor. O LinkedIn é pesquisado pela extensão local usando sua sessão autenticada; a extensão não se candidata nem contorna desafios de login.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Nome da busca"><Input placeholder="Backend Go nos Estados Unidos" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Palavras-chave"><Input placeholder="backend Go | Golang developer" value={form.query} onChange={(e) => setForm({ ...form, query: e.target.value })} /></Field>
+          <Field label="País ou localização"><Input placeholder="United States" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></Field>
+          <Field label="Modalidade">
+            <Select value={form.workModel} onChange={(e) => setForm({ ...form, workModel: e.target.value })}>
+              <option value="">Qualquer modalidade</option><option value="remote">Remoto</option><option value="hybrid">Híbrido</option><option value="onsite">Presencial</option>
+            </Select>
+          </Field>
+          <Field label="Agenda (cron)"><Input value={form.schedule_cron} onChange={(e) => setForm({ ...form, schedule_cron: e.target.value })} /></Field>
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Fontes</p>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("boards")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "boards") })} /> Sites públicos</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.sources.includes("linkedin")} onChange={() => setForm({ ...form, sources: toggle(form.sources, "linkedin") })} /> LinkedIn (extensão local)</label>
+          </div>
+          {form.sources.includes("boards") && (
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+              {boards.map(([id, label]) => <label key={id} className="flex items-center gap-2"><input type="checkbox" checked={form.boards.includes(id)} onChange={() => setForm({ ...form, boards: toggle(form.boards, id) })} />{label}</label>)}
+            </div>
+          )}
+        </div>
+        <Button
+          disabled={!form.name.trim() || !form.query.trim() || !form.sources.length || (form.sources.includes("boards") && !form.boards.length)}
+          onClick={() => create.mutate({
+            name: form.name.trim(),
+            query: form.query.trim(),
+            sources: form.sources,
+            schedule_cron: form.schedule_cron,
+            filters: {
+              ...(form.country.trim() && { country: form.country.trim() }),
+              ...(form.workModel && { work_models: [form.workModel] }),
+              ...(form.sources.includes("boards") && { boards: form.boards }),
+            },
+          })}
+        >Salvar busca</Button>
+      </Card>
+      <Card className="space-y-1 text-sm">
+        <p className="font-medium">Como funciona o LinkedIn</p>
+        <p className="text-muted-foreground">Instale e habilite a extensão, configure nela o endereço da API e o token, e mantenha o navegador aberto e conectado ao LinkedIn. A extensão verifica a agenda e importa vagas como novas sugestões para revisar em Vagas; nenhuma candidatura é enviada automaticamente.</p>
+      </Card>
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Sugestões recentes</h2>
+          <Button size="sm" variant="outline" onClick={() => window.location.assign("/vagas?triage=new")}>Ver em Vagas</Button>
+        </div>
+        {suggestions.data?.length ? (
+          <Stagger className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,360px),1fr))] gap-3">
+            {suggestions.data.map((job) => <StaggerItem key={job.id}><JobCard job={job} onOpen={setOpenJob} /></StaggerItem>)}
+          </Stagger>
+        ) : <EmptyState icon={<Search size={22} />} title="Nenhuma sugestão recente">Crie uma busca e as vagas encontradas aparecerão aqui para revisão.</EmptyState>}
+      </div>
+      <JobDrawer job={openJob} onClose={() => setOpenJob(null)} />
     </div>
   );
 }
